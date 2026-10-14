@@ -9,7 +9,7 @@
   ],
   "description": "Live Docker state, immutable running image IDs and source-build lifecycle events. Old removed containers are retained in Loki operation history; Prometheus current-state metrics vanish after deletion.",
   "schemaVersion": 40,
-  "version": 1,
+  "version": 2,
   "editable": false,
   "refresh": "10s",
   "time": {
@@ -38,8 +38,8 @@
   "panels": [
     {
       "id": 1,
-      "title": "Selected services: running",
-      "type": "stat",
+      "title": "Selected services — replicas, health & startup",
+      "type": "table",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -47,179 +47,210 @@
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 6,
-        "h": 5
+        "w": 24,
+        "h": 14
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_service_replicas_running{service=~\"$service\"}",
+          "expr": "sum by(service)(ddd_service_replicas_running{service=~\"$service\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{service}}",
-          "instant": false
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          "instant": true,
+          "format": "table"
         },
-        "orientation": "horizontal",
-        "textMode": "auto",
-        "colorMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "N/A"
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 2,
-      "title": "Selected services: desired",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
         {
-          "refId": "A",
-          "expr": "ddd_service_replicas_desired{service=~\"$service\"}",
+          "refId": "B",
+          "expr": "sum by(service)(ddd_service_replicas_desired{service=~\"$service\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{service}}",
-          "instant": false
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          "instant": true,
+          "format": "table"
         },
-        "orientation": "horizontal",
-        "textMode": "auto",
-        "colorMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "N/A"
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 3,
-      "title": "Selected services: healthy",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
         {
-          "refId": "A",
-          "expr": "ddd_service_replicas_healthy{service=~\"$service\"}",
+          "refId": "C",
+          "expr": "sum by(service)(ddd_service_replicas_healthy{service=~\"$service\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{service}}",
-          "instant": false
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          "instant": true,
+          "format": "table"
         },
-        "orientation": "horizontal",
-        "textMode": "auto",
-        "colorMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "N/A"
-        },
-        "overrides": []
-      },
-      "description": "Services without a Docker healthcheck have no healthy replicas; inspect their running status separately."
-    },
-    {
-      "id": 4,
-      "title": "Selected services: restart count",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
         {
-          "refId": "A",
-          "expr": "sum(ddd_container_restart_count{service=~\"$service\"}) or vector(0)",
+          "refId": "D",
+          "expr": "sum by(service)(ddd_service_restart_count{service=~\"$service\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{service}}",
-          "instant": false
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "(sum by(service)(ddd_service_replicas_running{service=~\"$service\"}) > bool 0) * ((sum by(service)(ddd_service_replicas_healthy{service=~\"$service\"}) == bool sum by(service)(ddd_service_replicas_running{service=~\"$service\"})) + 2 * (sum by(service)(ddd_service_replicas_without_healthcheck{service=~\"$service\"}) == bool sum by(service)(ddd_service_replicas_running{service=~\"$service\"})) + 3 * (sum by(service)(ddd_service_replicas_healthy{service=~\"$service\"}) < bool sum by(service)(ddd_service_replicas_running{service=~\"$service\"})) * (sum by(service)(ddd_service_replicas_without_healthcheck{service=~\"$service\"}) < bool sum by(service)(ddd_service_replicas_running{service=~\"$service\"})))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "expr": "1000 * max by(service)(ddd_container_started_at_seconds{service=~\"$service\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
         }
       ],
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "horizontal",
-        "textMode": "auto",
-        "colorMode": "value"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "noValue": "N/A"
+          "decimals": 0,
+          "custom": {
+            "align": "center",
+            "filterable": true
+          }
         },
-        "overrides": []
-      }
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trạng thái health"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Đã dừng",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Healthy",
+                        "color": "green"
+                      },
+                      "2": {
+                        "text": "Chưa có healthcheck",
+                        "color": "blue"
+                      },
+                      "3": {
+                        "text": "Chờ / lỗi healthcheck",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "custom.align",
+                "value": "left"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Khởi động gần nhất"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Health status: healthy = all running replicas pass healthcheck; no healthcheck = containers are running but readiness is not verified; pending/unhealthy = at least one check is not healthy. Compare running with desired replicas. Auto restarts uses Docker RestartCount: manual restarts and container recreation are excluded. Last started shows the latest start among service replicas.",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "service",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true
+            },
+            "indexByName": {
+              "service": 0,
+              "Value #E": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5,
+              "Value #F": 6
+            },
+            "renameByName": {
+              "service": "Service",
+              "Value #A": "Đang chạy",
+              "Value #B": "Mong muốn",
+              "Value #C": "Healthcheck OK",
+              "Value #D": "Auto restarts",
+              "Value #E": "Trạng thái health",
+              "Value #F": "Khởi động gần nhất"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Service",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": 5,
@@ -231,7 +262,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 14,
         "w": 8,
         "h": 5
       },
@@ -277,7 +308,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 5,
+        "y": 14,
         "w": 8,
         "h": 5
       },
@@ -323,7 +354,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 5,
+        "y": 14,
         "w": 8,
         "h": 5
       },
@@ -369,7 +400,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 10,
+        "y": 19,
         "w": 12,
         "h": 8
       },
@@ -414,7 +445,7 @@
     },
     {
       "id": 9,
-      "title": "Restart count per selected container",
+      "title": "Docker auto restarts per selected container",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -422,7 +453,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 10,
+        "y": 19,
         "w": 12,
         "h": 8
       },
@@ -434,7 +465,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{service}}",
+          "legendFormat": "{{service}} / {{container}}",
           "instant": false
         }
       ],
@@ -443,7 +474,8 @@
           "unit": "short"
         },
         "overrides": []
-      }
+      },
+      "description": "Docker RestartCount tracks automatic restarts, excluding manual restart and container recreation."
     },
     {
       "id": 10,
@@ -455,7 +487,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 27,
         "w": 24,
         "h": 9
       },
@@ -491,7 +523,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 36,
         "w": 12,
         "h": 8
       },
@@ -527,7 +559,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 27,
+        "y": 36,
         "w": 12,
         "h": 8
       },
@@ -563,7 +595,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 44,
         "w": 24,
         "h": 10
       },
