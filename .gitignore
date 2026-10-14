@@ -29,3 +29,6 @@ infra/lgtm/provisioning/alerting/telegram.yaml
 infra/lgtm/provisioning/alerting/notification-templates.yaml
 
 .logs/
+
+# Private manual SQL and local credentials
+.local/

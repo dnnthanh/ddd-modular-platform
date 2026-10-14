@@ -25,8 +25,16 @@ Giới hạn request JSON 1 MB và audit body preview 8 KB không giới hạn l
 Hai tài khoản dịch vụ: `run` chạy ứng dụng và Liquibase, `backup` chỉ đọc để dump.
 `run` sở hữu schema nên có DDL cần cho Liquibase, nhưng không có superuser,
 CREATE ROLE hoặc CREATE DATABASE. Không tạo user Liquibase/exporter riêng.
+Tạo user/quyền thủ công trước lần khởi động app trên DB mới: chạy SQL riêng
+`.local/db-users.sql` bằng tài khoản quản trị vào `modulardb`. File chỉ ở local,
+không vào Git hoặc Docker build; deploy không còn tự chạy grant. DB hiện tại
+đã có user/quyền nên không cần tạo lại khi restart.
 PostgreSQL vẫn có tài khoản quản trị bootstrap và các role hệ thống; credential
 quản trị không cấp cho ứng dụng/backup. `.env` là cấu hình chính và không commit.
+
+Bảng tổng hợp health/restart dùng snapshot hiện tại theo service, tránh đếm
+series container/health cũ còn giữ trong Prometheus. Observer có healthcheck
+kiểm tra HTTP metrics và lần scrape Docker thành công.
 
 Hai exporter có healthcheck `/metrics` và yêu cầu `pg_up`/`redis_up` bằng 1.
 Redis exporter giữ binary upstream, bổ sung BusyBox tĩnh để probe vì image gốc

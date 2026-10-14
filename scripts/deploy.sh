@@ -204,12 +204,8 @@ do_up(){
   # Build first so a build failure does not change the desired replica count.
   # Re-using the stable :local image tag is intentional; Grafana compares real image SHA.
   compose build gateway eureka modular-app postgres-backup redis-exporter
-  # An existing PostgreSQL volume does not rerun docker-entrypoint-initdb.d.
-  # Provision accounts through the database container; passwords stay in its
-  # environment and never appear in a host command line.
+  # Database users are created manually with private .local/db-users.sql on fresh installs.
   compose up -d postgres
-  compose exec -T postgres sh -c 'exec psql --no-psqlrc --set=ON_ERROR_STOP=1 --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
-    < "$ROOT/infra/postgres/init/provision-roles.psql"
   # Preserve legacy revoked tokens before switching the shared typed cache.
   compose up -d redis
   compose stop modular-app

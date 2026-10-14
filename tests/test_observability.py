@@ -96,6 +96,25 @@ class ObserverTests(unittest.TestCase):
         self.assertIn('ddd_service_replicas_running{service="postgres"} 1', obs.last_metrics)
         self.assertIn('ddd_service_replicas_running{service="redis"} 0', obs.last_metrics)
 
+    def test_health_transition_replaces_current_service_summary(self):
+        container = {
+            'Id': 'c' * 64, 'Name': '/ddd-platform-postgres-exporter-1',
+            'Image': 'sha256:test', 'RestartCount': 2,
+            'Config': {'Image': 'exporter:test', 'Labels': {'com.docker.compose.service': 'postgres-exporter'}},
+            'State': {'Running': True, 'Status': 'running'},
+        }
+        with patch.object(obs, 'fetch_containers', return_value=[container]), \
+             patch.object(obs, 'container_stats', return_value=None), \
+             patch.object(obs, 'image_match', return_value=0), \
+             patch.object(obs, 'event'), patch.object(obs, 'export_otlp_metrics'), \
+             patch.object(obs.scrape_metrics, 'export'):
+            for health, healthy, unchecked in [('none', 0, 1), ('healthy', 1, 0), ('unhealthy', 0, 0), ('healthy', 1, 0)]:
+                container['State']['Health'] = {'Status': health}
+                obs.refresh()
+                self.assertIn(f'ddd_service_replicas_healthy{{service="postgres-exporter"}} {healthy}\n', obs.last_metrics)
+                self.assertIn(f'ddd_service_replicas_without_healthcheck{{service="postgres-exporter"}} {unchecked}\n', obs.last_metrics)
+                self.assertIn('ddd_service_restart_count{service="postgres-exporter"} 2\n', obs.last_metrics)
+
     def test_deployment_event_whitelist(self):
         import subprocess
         with tempfile.TemporaryDirectory() as t:

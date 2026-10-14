@@ -146,12 +146,9 @@ services:
       POSTGRES_USER: modular
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set_DB_PASSWORD}
       POSTGRES_DB: modulardb
-      DB_RUN_PASSWORD: ${DB_RUN_PASSWORD:?Set_DB_RUN_PASSWORD}
-      DB_BACKUP_PASSWORD: ${DB_BACKUP_PASSWORD:?Set_DB_BACKUP_PASSWORD}
     # PostgreSQL 18+ stores versioned PGDATA under this parent directory.
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U modular -d modulardb"]
@@ -333,6 +330,12 @@ services:
       - ./.deploy:/state:ro
     depends_on: [docker-socket-proxy, lgtm, postgres-exporter, redis-exporter]
     networks: [docker_api, observability, application]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; data=urllib.request.urlopen('http://127.0.0.1:9209/metrics', timeout=4).read(); assert b'ddd_observer_scrape_success 1\\n' in data"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
 networks:

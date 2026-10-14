@@ -398,7 +398,7 @@
         },
         {
           "refId": "D",
-          "expr": "sum by(service)(ddd_container_restart_count)",
+          "expr": "sum by(service)(ddd_service_restart_count)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -408,7 +408,7 @@
         },
         {
           "refId": "E",
-          "expr": "(sum by(service)(ddd_service_replicas_running) > bool 0) * ((sum by(service)(ddd_service_replicas_healthy) == bool sum by(service)(ddd_service_replicas_running)) + 2 * ((count by(service)(ddd_container_health{health=\"none\"}) or on(service) (0 * sum by(service)(ddd_service_replicas_running))) == bool sum by(service)(ddd_service_replicas_running)) + 3 * (sum by(service)(ddd_service_replicas_healthy) < bool sum by(service)(ddd_service_replicas_running)) * ((count by(service)(ddd_container_health{health=\"none\"}) or on(service) (0 * sum by(service)(ddd_service_replicas_running))) < bool sum by(service)(ddd_service_replicas_running)))",
+          "expr": "(sum by(service)(ddd_service_replicas_running) > bool 0) * ((sum by(service)(ddd_service_replicas_healthy) == bool sum by(service)(ddd_service_replicas_running)) + 2 * (sum by(service)(ddd_service_replicas_without_healthcheck) == bool sum by(service)(ddd_service_replicas_running)) + 3 * (sum by(service)(ddd_service_replicas_healthy) < bool sum by(service)(ddd_service_replicas_running)) * (sum by(service)(ddd_service_replicas_without_healthcheck) < bool sum by(service)(ddd_service_replicas_running)))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

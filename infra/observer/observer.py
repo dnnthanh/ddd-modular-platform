@@ -208,7 +208,7 @@ def scrape_targets(items):
 def refresh():
     global last_metrics, last_states
     items = fetch_containers()
-    stats = collections.defaultdict(lambda: {'running': 0, 'healthy': 0})
+    stats = collections.defaultdict(lambda: {'running': 0, 'healthy': 0, 'without_healthcheck': 0, 'restarts': 0})
     lines = [metric('ddd_observer_scrape_success', 1)]
     current_states = {}
     for item in items:
@@ -244,6 +244,8 @@ def refresh():
                 ])
         stats[service]['running'] += running
         stats[service]['healthy'] += int(health == 'healthy' and running == 1)
+        stats[service]['without_healthcheck'] += int(health == 'none' and running == 1)
+        stats[service]['restarts'] += restart_count
         lines += [
             metric('ddd_container_info', 1, info_labels),
             metric('ddd_container_running', running, labels),
@@ -269,6 +271,9 @@ def refresh():
         lines.extend([
             metric('ddd_service_replicas_running', stats[service]['running'], {'service': service}),
             metric('ddd_service_replicas_healthy', stats[service]['healthy'], {'service': service}),
+            # Fixed service labels prevent old container/health-label series affecting the summary.
+            metric('ddd_service_replicas_without_healthcheck', stats[service]['without_healthcheck'], {'service': service}),
+            metric('ddd_service_restart_count', stats[service]['restarts'], {'service': service}),
             metric('ddd_service_replicas_desired', desired if service == 'modular-app' else 1, {'service': service}),
         ])
     with lock:

@@ -15,3 +15,6 @@ secrets/
 .backups/
 
 .logs/
+
+# Private manual SQL and local credentials
+.local/
