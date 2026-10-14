@@ -32,6 +32,11 @@ không vào Git hoặc Docker build; deploy không còn tự chạy grant. DB hi
 PostgreSQL vẫn có tài khoản quản trị bootstrap và các role hệ thống; credential
 quản trị không cấp cho ứng dụng/backup. `.env` là cấu hình chính và không commit.
 
+Hikari là pool trong mỗi app replica; dashboard Infrastructure hiển thị active,
+idle, max, pending, timeout và thời gian lấy connection cho cả 3 replica.
+Cột Auto restarts là Docker RestartCount (restart tự động), không tính restart
+thủ công/recreate. Khởi động gần nhất cho biết lần start mới nhất của service.
+
 Bảng tổng hợp health/restart dùng snapshot hiện tại theo service, tránh đếm
 series container/health cũ còn giữ trong Prometheus. Observer có healthcheck
 kiểm tra HTTP metrics và lần scrape Docker thành công.

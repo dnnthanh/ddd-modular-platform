@@ -1,6 +1,6 @@
 {
   "uid": "ddd-jvm-hikari",
-  "title": "Runtime \u2014 JVM, GC, Hikari & HTTP",
+  "title": "Runtime — JVM, GC, Hikari & HTTP",
   "tags": [
     "ddd",
     "jvm",
@@ -212,7 +212,7 @@
     },
     {
       "id": 5,
-      "title": "Hikari active vs max",
+      "title": "Hikari connections — active / idle / max",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -227,12 +227,30 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service,container) (hikaricp_connections_active or hikaricp_connections_max)",
-          "legendFormat": "{{service}} / {{container}}",
+          "expr": "hikaricp_connections_active{service=\"modular-app\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "Active — {{container}} / {{pool}}"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_idle{service=\"modular-app\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "Idle — {{container}} / {{pool}}"
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections_max{service=\"modular-app\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "Max — {{container}} / {{pool}}"
         }
       ],
       "fieldConfig": {
@@ -256,7 +274,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Each app replica has its own PostgreSQL Hikari pool. Active, idle and max are separate series."
     },
     {
       "id": 6,

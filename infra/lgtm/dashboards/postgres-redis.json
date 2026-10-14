@@ -1,6 +1,6 @@
 {
   "uid": "ddd-postgres-redis",
-  "title": "Infrastructure \u2014 PostgreSQL & Redis",
+  "title": "Infrastructure — PostgreSQL, Hikari & Redis",
   "tags": [
     "ddd",
     "postgres",
@@ -36,7 +36,7 @@
         {
           "refId": "A",
           "expr": "pg_up",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -87,7 +87,7 @@
         {
           "refId": "A",
           "expr": "redis_up",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -138,7 +138,7 @@
         {
           "refId": "A",
           "expr": "ddd_metrics_scrape_success{service=~\"postgres|redis\"}",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -181,7 +181,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 21,
         "w": 12,
         "h": 8
       },
@@ -189,7 +189,7 @@
         {
           "refId": "A",
           "expr": "pg_stat_database_numbackends{datname=\"modulardb\"}",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{datname}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -229,7 +229,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 5,
+        "y": 21,
         "w": 12,
         "h": 8
       },
@@ -237,7 +237,7 @@
         {
           "refId": "A",
           "expr": "sum by (datname) (rate(pg_stat_database_xact_commit_total{datname=\"modulardb\"}[5m]))",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{datname}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -277,7 +277,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 29,
         "w": 12,
         "h": 8
       },
@@ -285,7 +285,7 @@
         {
           "refId": "A",
           "expr": "sum by (datname) (increase(pg_stat_database_deadlocks_total{datname=\"modulardb\"}[10m]))",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{datname}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -325,7 +325,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 13,
+        "y": 29,
         "w": 12,
         "h": 8
       },
@@ -333,7 +333,7 @@
         {
           "refId": "A",
           "expr": "100 * pg_stat_database_blks_hit_total{datname=\"modulardb\"} / clamp_min(pg_stat_database_blks_hit_total{datname=\"modulardb\"} + pg_stat_database_blks_read_total{datname=\"modulardb\"},1)",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{datname}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -373,7 +373,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 37,
         "w": 12,
         "h": 8
       },
@@ -381,7 +381,7 @@
         {
           "refId": "A",
           "expr": "redis_memory_used_bytes/1024/1024",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -421,7 +421,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 21,
+        "y": 37,
         "w": 12,
         "h": 8
       },
@@ -429,7 +429,7 @@
         {
           "refId": "A",
           "expr": "100 * redis_memory_used_bytes / clamp_min(redis_memory_max_bytes,1)",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -469,7 +469,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 45,
         "w": 12,
         "h": 8
       },
@@ -477,7 +477,7 @@
         {
           "refId": "A",
           "expr": "redis_connected_clients",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -517,7 +517,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 29,
+        "y": 45,
         "w": 12,
         "h": 8
       },
@@ -525,7 +525,7 @@
         {
           "refId": "A",
           "expr": "rate(redis_evicted_keys_total[5m])",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -565,7 +565,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 53,
         "w": 12,
         "h": 8
       },
@@ -573,7 +573,7 @@
         {
           "refId": "A",
           "expr": "ddd_container_cpu_percent{service=\"postgres\"}",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -613,7 +613,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 37,
+        "y": 53,
         "w": 12,
         "h": 8
       },
@@ -621,7 +621,7 @@
         {
           "refId": "A",
           "expr": "ddd_container_cpu_percent{service=\"redis\"}",
-          "legendFormat": "{{service}} / {{container}}",
+          "legendFormat": "{{service}} / {{service}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -650,6 +650,220 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 14,
+      "title": "Hikari connections — active / idle / max",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{service=\"modular-app\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "Active — {{container}} / {{pool}}"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_idle{service=\"modular-app\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "Idle — {{container}} / {{pool}}"
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections_max{service=\"modular-app\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "Max — {{container}} / {{pool}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Each app replica has its own PostgreSQL Hikari pool. Active, idle and max are separate series."
+    },
+    {
+      "id": 15,
+      "title": "Hikari waiting threads",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_pending{service=\"modular-app\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{container}} / {{pool}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "PostgreSQL connection pool inside each modular-app replica."
+    },
+    {
+      "id": 16,
+      "title": "Hikari connection timeouts (5m)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(hikaricp_connections_timeout_total{service=\"modular-app\"}[5m])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{container}} / {{pool}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "PostgreSQL connection pool inside each modular-app replica."
+    },
+    {
+      "id": 17,
+      "title": "Hikari mean connection acquisition time",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(hikaricp_connections_acquire_seconds_sum_total{service=\"modular-app\"}[5m]) / clamp_min(rate(hikaricp_connections_acquire_seconds_count_total{service=\"modular-app\"}[5m]), 1e-9)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{container}} / {{pool}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "PostgreSQL connection pool inside each modular-app replica."
     }
   ]
 }

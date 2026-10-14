@@ -353,7 +353,7 @@
     },
     {
       "id": 10,
-      "title": "Service overview — replicas, health & restarts",
+      "title": "Service overview — replicas, health & startup",
       "type": "table",
       "datasource": {
         "type": "prometheus",
@@ -409,6 +409,16 @@
         {
           "refId": "E",
           "expr": "(sum by(service)(ddd_service_replicas_running) > bool 0) * ((sum by(service)(ddd_service_replicas_healthy) == bool sum by(service)(ddd_service_replicas_running)) + 2 * (sum by(service)(ddd_service_replicas_without_healthcheck) == bool sum by(service)(ddd_service_replicas_running)) + 3 * (sum by(service)(ddd_service_replicas_healthy) < bool sum by(service)(ddd_service_replicas_running)) * (sum by(service)(ddd_service_replicas_without_healthcheck) < bool sum by(service)(ddd_service_replicas_running)))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "expr": "1000 * max by(service)(ddd_container_started_at_seconds)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -484,10 +494,26 @@
                 "value": "left"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Khởi động gần nhất"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
           }
         ]
       },
-      "description": "Health status: healthy = all running replicas pass healthcheck; no healthcheck = containers are running but readiness is not verified; pending/unhealthy = at least one check is not healthy. Compare running with desired replicas.",
+      "description": "Health status: healthy = all running replicas pass healthcheck; no healthcheck = containers are running but readiness is not verified; pending/unhealthy = at least one check is not healthy. Compare running with desired replicas. Auto restarts uses Docker RestartCount: manual restarts and container recreation are excluded. Last started shows the latest start among service replicas.",
       "transformations": [
         {
           "id": "joinByField",
@@ -504,7 +530,8 @@
               "Time 1": true,
               "Time 2": true,
               "Time 3": true,
-              "Time 4": true
+              "Time 4": true,
+              "Time 5": true
             },
             "indexByName": {
               "service": 0,
@@ -512,15 +539,17 @@
               "Value #A": 2,
               "Value #B": 3,
               "Value #C": 4,
-              "Value #D": 5
+              "Value #D": 5,
+              "Value #F": 6
             },
             "renameByName": {
               "service": "Service",
               "Value #A": "Đang chạy",
               "Value #B": "Mong muốn",
               "Value #C": "Healthcheck OK",
-              "Value #D": "Restarts",
-              "Value #E": "Trạng thái health"
+              "Value #D": "Auto restarts",
+              "Value #E": "Trạng thái health",
+              "Value #F": "Khởi động gần nhất"
             }
           }
         },
