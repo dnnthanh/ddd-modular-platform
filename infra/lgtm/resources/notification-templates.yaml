@@ -7,7 +7,7 @@ templates:
       {{ define "ddd.telegram.vi" -}}
       {{ if eq .Status "firing" }}🔴 CẢNH BÁO HỆ THỐNG{{ else }}🟢 CẬP NHẬT TRẠNG THÁI{{ end }}
       Đang cảnh báo: {{ len .Alerts.Firing }} | Đã kết thúc: {{ len .Alerts.Resolved }}
-      {{ range $index, $alert := .Alerts }}{{ if lt $index 5 }}
+      {{ range $index, $alert := .Alerts }}{{ if lt $index 3 }}
       {{ if .Labels.datasource_uid }}Loại: LỖI MONITORING — không xác nhận lỗi API
       Rule: {{ if .Labels.rulename }}{{ .Labels.rulename }}{{ else }}{{ .Labels.alertname }}{{ end }}
       Datasource: {{ .Labels.datasource_uid }} | Query: {{ .Labels.ref_id }}
@@ -27,6 +27,6 @@ templates:
       {{ if .PanelURL }}Biểu đồ: {{ .PanelURL }}{{ else if .DashboardURL }}Dashboard: {{ .DashboardURL }}{{ end }}
       {{ if .GeneratorURL }}Rule: {{ .GeneratorURL }}{{ end }}
       {{ end }}{{ end }}
-      {{ if gt (len .Alerts) 5 }}Chỉ hiển thị 5 cảnh báo đầu; xem Grafana để đọc toàn bộ.{{ end }}
+      {{ if gt (len .Alerts) 3 }}Chỉ hiển thị 3 cảnh báo đầu; xem Grafana để đọc toàn bộ.{{ end }}
       Xem Grafana: {{ .ExternalURL }}
       {{- end }}

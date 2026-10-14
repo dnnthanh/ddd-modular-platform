@@ -389,7 +389,7 @@ Tin có service, exception class, vị trí stacktrace, trace ID nếu có, giá
 có nghĩa ERROR không có loại exception trong stacktrace. Stacktrace đầy đủ đọc
 qua panel Common Java logs ở Observability; trace ID tra ở Tempo Explore.
 Không gửi raw exception message/body/password/token qua Telegram. Template chỉ
-hiển thị tối đa 5 alert đầu trong nhóm; phần còn lại xem Grafana. Cửa sổ 5 phút
+hiển thị tối đa 3 alert đầu trong nhóm; phần còn lại xem Grafana. Cửa sổ 5 phút
 không còn ERROR là kết thúc cảnh báo quan sát, không chứng minh bug đã được sửa.
 
 `NoData`, `DatasourceError` và `MissingSeries` là vấn đề dữ liệu/evaluation,
@@ -404,3 +404,67 @@ không thấy HTTP audit 5xx tương ứng. Vì vậy tin này là cảnh báo m
 trình bày nhầm như HTTP 5xx, không có exception API để gắn vào. Chưa xác định
 được thành phần gây gap metrics chỉ từ lịch sử này; không gán cho lỗi heartbeat
 Eureka lúc 15:55 (khác thời điểm).
+
+## 10. Cách tái hiện rule và phạm vi kiểm chứng
+
+Một phép thử end-to-end cần chứng minh: dữ liệu đầu vào thực sự xuất hiện → query
+vượt ngưỡng → Pending đủ thời gian → Firing → notification Telegram thành công →
+phục hồi dữ liệu → Normal. Test render template hoặc POST gửi Telegram riêng chỉ
+kiểm chứng định dạng/transport, không chứng minh rule tự phát hiện sự cố.
+
+Ngày 14/10/2026 đã thử API thật bằng cách tạm đổi tên bảng Catalog (không xóa dữ
+liệu), gửi request GET có authentication trong 5 phút rồi đổi tên lại. Kết quả:
+288 response 503; log `InvalidDataAccessResourceUsageException`, SQL báo relation
+catalog_item không tồn tại, có trace ID. Rule exception và rule 5xx đều Firing.
+Sau restore, GET Catalog trả 200. Lỗi này không đổi JWT/quyền và session test được
+logout. Khi áp dụng cách thử này phải có cơ chế finally/rollback để phục hồi tên
+bảng, không làm trên production.
+
+Để test các rule tài nguyên, tạo Prometheus + exporter fixture riêng và bản sao
+rule `TEST LOCAL`, datasource riêng, giữ nguyên query, ngưỡng và pending duration.
+Đưa fixture từ normal sang fault rồi về normal. Rule test được gắn `test_run` và
+summary TEST FIXTURE. Cách này kiểm chứng logic evaluation/notification mà không
+thực sự làm heap đầy, CPU quá tải hoặc DB deadlock; không được ghi nhận như đã
+kiểm thử sự cố vật lý của hệ thống. Sau thử phải xóa group test, datasource và
+container fixture; rule thật vẫn giữ nguyên.
+
+| Rule | Tín hiệu để tái hiện | Thời gian giữ điều kiện |
+|---|---|---|
+| `ddd-app-replicas-zero` | Running app = 0 | 1m |
+| `ddd-gateway-down` | Running gateway = 0 | 1m |
+| `ddd-postgres-down` | pg_up = 0 | 1m |
+| `ddd-redis-down` | redis_up = 0 | 1m |
+| `ddd-app-missing-replicas` | Healthy app < Desired | 3m |
+| `ddd-jvm-high-heap` | Heap used/max >85% | 5m |
+| `ddd-hikari-high-usage` | Hikari active/max >85% | 3m |
+| `ddd-postgres-high-connections` | Database connections >40 | 5m |
+| `ddd-redis-high-memory` | Redis used/max >85% | 5m |
+| `ddd-postgres-deadlocks` | Counter deadlock tăng trong cửa sổ 10 phút | 1m |
+| `ddd-containers-cpu-high` | CPU >90% một core | 5m |
+| `ddd-exporter-scrape-failed` | Scrape success = 0 | 2m |
+| `ddd-observer-down` | Observer success = 0 | 2m |
+| `ddd-nginx-down` | Running nginx = 0 | 2m |
+| `ddd-eureka-down` | Running Eureka = 0 | 2m |
+| `ddd-hikari-pending` | Hikari pending >0 | 2m |
+| `ddd-http-5xx` | Rate 5xx >0.1/s trong cửa sổ 5 phút | 2m |
+| `ddd-java-exception` | Một log ERROR exception phù hợp trong 5 phút | 0s |
+
+Rate/increase có cửa sổ nhìn về quá khứ: API hết lỗi chưa làm rate 5 phút trở về 0
+ngay; counter deadlock ngừng tăng chưa làm increase 10 phút về 0 ngay. Chờ hết cửa
+sổ rồi đối chiếu Normal, không reset rule để giả lập tin phục hồi. Telegram có
+`group_wait=30s` và `group_interval=5m`, nên thay đổi state và lúc nhận tin không
+nhất thiết cùng giây. Trạng thái resolved chỉ chứng minh điều kiện không còn
+vượt ngưỡng ở lần evaluation, không phải bằng chứng mọi bug đã được sửa.
+
+Phép thử tạo nhiều trace làm tin Telegram vượt giới hạn 4096 ký tự. Template đã
+được giảm còn 3 chi tiết/nhóm; render bằng 6 alert thật dài 2736 ký tự, không bị
+cắt mất link điều tra. Phần còn lại xem trong Grafana.
+
+Kết quả cuối của lượt thử: 17/17 bản sao metrics chuyển Normal → Pending →
+Alerting → Normal, 0 transition do NoData/Error. Hai rule thật exception/5xx
+đều Firing rồi về Normal sau khi bảng được phục hồi và hết cửa sổ 5 phút.
+Grafana ghi nhận các lượt gửi Telegram trong lượt thử tăng từ 3 lên 42;
+không ghi nhận lỗi gửi ở các lượt mới. Đây là xác nhận phía Grafana/transport,
+không khẳng định người nhận đã đọc đủ mọi tin. Tất cả 17 rule thử, datasource
+TEST và hai container fixture đã được xóa; còn đúng 18 rule thật và 4 datasource
+LGTM mặc định. Các ngưỡng và pending duration thật không bị giảm để test.
