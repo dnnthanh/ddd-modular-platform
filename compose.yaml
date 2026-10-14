@@ -220,16 +220,31 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
     networks: [data, observability]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- -T 4 http://127.0.0.1:9187/metrics | grep -q '^pg_up 1$'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
   redis-exporter:
     profiles: ["observability"]
-    image: oliver006/redis_exporter:v1.93.0
+    image: ddd/redis-exporter:local
+    build:
+      context: .
+      dockerfile: infra/exporters/redis.Dockerfile
     environment:
       REDIS_ADDR: redis://redis:6379
     depends_on:
       redis: {condition: service_healthy}
     networks: [application, observability]
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "sh", "-c", "/bin/busybox wget -qO- -T 4 http://127.0.0.1:9121/metrics | /bin/busybox grep -q '^redis_up 1$'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
   # Grafana's upstream docker-otel-lgtm all-in-one bundle provides

@@ -28,6 +28,11 @@ CREATE ROLE hoặc CREATE DATABASE. Không tạo user Liquibase/exporter riêng.
 PostgreSQL vẫn có tài khoản quản trị bootstrap và các role hệ thống; credential
 quản trị không cấp cho ứng dụng/backup. `.env` là cấu hình chính và không commit.
 
+Hai exporter có healthcheck `/metrics` và yêu cầu `pg_up`/`redis_up` bằng 1.
+Redis exporter giữ binary upstream, bổ sung BusyBox tĩnh để probe vì image gốc
+không có shell. `unless-stopped` xử lý process thoát; `unhealthy` chỉ đánh dấu,
+không tự restart container.
+
 ## Backup và Telegram
 
 Backup chạy ngay khi khởi động, rồi đầu mỗi giờ khi Docker đang chạy, giữ 7 ngày

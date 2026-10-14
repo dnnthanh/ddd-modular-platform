@@ -203,7 +203,7 @@ do_up(){
     || err 'JWT keys missing. Run ./scripts/generate-jwt-keys.sh once before deploy.'
   # Build first so a build failure does not change the desired replica count.
   # Re-using the stable :local image tag is intentional; Grafana compares real image SHA.
-  compose build gateway eureka modular-app postgres-backup
+  compose build gateway eureka modular-app postgres-backup redis-exporter
   # An existing PostgreSQL volume does not rerun docker-entrypoint-initdb.d.
   # Provision accounts through the database container; passwords stay in its
   # environment and never appear in a host command line.
