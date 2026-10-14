@@ -1,15 +1,15 @@
 {
   "uid": "ddd-platform-observability",
-  "title": "Observability \u2014 Services & Logs",
+  "title": "Observability — Services & Logs",
   "tags": [
     "ddd",
     "tracing",
     "logs",
     "otel"
   ],
-  "description": "OpenTelemetry traces and structured Logback JSON from Spring Boot via Alloy \u2192 Loki. Includes HTTP request/response metadata and sanitized body previews.",
+  "description": "Java logs and traces; PostgreSQL/Redis connectivity and Docker status for every platform service.",
   "schemaVersion": 40,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "refresh": "15s",
   "time": {
@@ -166,7 +166,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 16,
         "w": 12,
         "h": 11
       },
@@ -200,7 +200,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 5,
+        "y": 16,
         "w": 12,
         "h": 11
       },
@@ -235,7 +235,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 27,
         "w": 24,
         "h": 12
       },
@@ -258,6 +258,213 @@
         "enableLogDetails": true,
         "prettifyLogMessage": true
       }
+    },
+    {
+      "id": 8,
+      "title": "PostgreSQL connection (1=OK)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pg_up",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{service}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "auto",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Redis connection (1=OK)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redis_up",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{service}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "auto",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "title": "All Docker services: running replicas",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ddd_service_replicas_running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "{{service}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "Eureka structured JSON logs",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"eureka-server\"} | json",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false
+      }
+    },
+    {
+      "id": 12,
+      "title": "Common Java logs — gateway, app & Eureka",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\"api-gateway|modular-app|eureka-server\"} | json",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false
+      },
+      "description": "Aggregated logs from every Java replica. Infrastructure is monitored through metrics."
     }
   ],
   "links": [

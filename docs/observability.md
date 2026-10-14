@@ -3,7 +3,10 @@
 Mặc định Compose bật profile `observability`, `OTEL_ENABLED=true` và chạy
 1 replica ứng dụng. Java gửi metrics/traces vào LGTM; PostgreSQL, Redis và
 các container được theo dõi qua exporters/observer. Dashboard Operations mặc định
-chọn tất cả Docker service, có thể lọc riêng từng service.
+chọn tất cả Docker service, có thể lọc riêng từng service. Observability hiển thị
+kết nối PostgreSQL/Redis và trạng thái mọi service. JVM Overview giữ UID upstream,
+được mở rộng bằng `infra/lgtm/resources/jvm-overview.json`, có log chung ba service
+Java. Bộ lọc Job/Instance ở JVM chỉ lọc metrics; log chung gom mọi replica.
 
 ## Logback
 

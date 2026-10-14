@@ -255,6 +255,8 @@ services:
       # Keep Loki Java logs separate from Grafana/metrics/traces storage.
       - loki_java_data:/data/loki
       - ./infra/lgtm/dashboards:/var/lib/grafana/dashboards/ddd:ro
+      # Extend the upstream JVM dashboard in place, keeping its existing UID/provider.
+      - ./infra/lgtm/resources/jvm-overview.json:/otel-lgtm/grafana-dashboard-jvm-metrics.json:ro
       - ./infra/lgtm/provisioning/ddd.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/ddd.yaml:ro
       # Custom datasource definitions are kept commented in the source, not mounted.
       # - ./infra/lgtm/provisioning/datasources.yaml:/etc/grafana/provisioning/datasources/ddd.yaml:ro
