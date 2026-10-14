@@ -166,7 +166,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 20,
         "w": 12,
         "h": 11
       },
@@ -200,7 +200,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 20,
         "w": 12,
         "h": 11
       },
@@ -235,7 +235,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 31,
         "w": 24,
         "h": 12
       },
@@ -353,8 +353,8 @@
     },
     {
       "id": 10,
-      "title": "All Docker services: running replicas",
-      "type": "stat",
+      "title": "Service overview — replicas, health & restarts",
+      "type": "table",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -363,39 +363,180 @@
         "x": 0,
         "y": 10,
         "w": 24,
-        "h": 6
+        "h": 10
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_service_replicas_running",
+          "expr": "sum by(service)(ddd_service_replicas_running)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "{{service}}",
-          "instant": true
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(service)(ddd_service_replicas_desired)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by(service)(ddd_service_replicas_healthy)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "sum by(service)(ddd_container_restart_count)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "(sum by(service)(ddd_service_replicas_running) > bool 0) * ((sum by(service)(ddd_service_replicas_healthy) == bool sum by(service)(ddd_service_replicas_running)) + 2 * ((count by(service)(ddd_container_health{health=\"none\"}) or on(service) (0 * sum by(service)(ddd_service_replicas_running))) == bool sum by(service)(ddd_service_replicas_running)) + 3 * (sum by(service)(ddd_service_replicas_healthy) < bool sum by(service)(ddd_service_replicas_running)) * ((count by(service)(ddd_container_health{health=\"none\"}) or on(service) (0 * sum by(service)(ddd_service_replicas_running))) < bool sum by(service)(ddd_service_replicas_running)))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "instant": true,
+          "format": "table"
         }
       ],
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "horizontal",
-        "textMode": "value_and_name",
-        "colorMode": "value"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "noValue": "N/A"
+          "decimals": 0,
+          "custom": {
+            "align": "center",
+            "filterable": true
+          }
         },
-        "overrides": []
-      }
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trạng thái health"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Đã dừng",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Healthy",
+                        "color": "green"
+                      },
+                      "2": {
+                        "text": "Chưa có healthcheck",
+                        "color": "blue"
+                      },
+                      "3": {
+                        "text": "Chờ / lỗi healthcheck",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "custom.align",
+                "value": "left"
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Health status: healthy = all running replicas pass healthcheck; no healthcheck = containers are running but readiness is not verified; pending/unhealthy = at least one check is not healthy. Compare running with desired replicas.",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "service",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true
+            },
+            "indexByName": {
+              "service": 0,
+              "Value #E": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5
+            },
+            "renameByName": {
+              "service": "Service",
+              "Value #A": "Đang chạy",
+              "Value #B": "Mong muốn",
+              "Value #C": "Healthcheck OK",
+              "Value #D": "Restarts",
+              "Value #E": "Trạng thái health"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Service",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": 11,
@@ -407,7 +548,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 43,
         "w": 24,
         "h": 10
       },
@@ -441,7 +582,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 53,
         "w": 24,
         "h": 12
       },
