@@ -5,6 +5,7 @@ import dev.demo.core.exception.type.NotFoundException;
 import dev.demo.core.stereotype.Persistence;
 import dev.demo.identity.application.port.RolePort;
 import dev.demo.identity.domain.entity.RoleDefinition;
+import dev.demo.identity.infrastructure.persistence.entity.RoleEntity;
 import dev.demo.identity.infrastructure.persistence.repository.RoleRepository;
 import dev.demo.identity.mapper.IdentityMapper;
 import java.util.Collection;
@@ -38,7 +39,7 @@ public class RolePersistenceAdapter implements RolePort {
   @Transactional(readOnly = true)
   public Set<String> existingCodes(Collection<String> codes) {
     return roleRepository.findAllById(codes).stream()
-        .map(entity -> entity.getCode())
+        .map(RoleEntity::getCode)
         .collect(Collectors.toUnmodifiableSet());
   }
 

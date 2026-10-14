@@ -22,7 +22,7 @@ final class AnonymousRateLimitKey {
         && realIp.matches("[0-9a-fA-F:.]{2,45}")) {
       try {
         clientIp = InetAddress.getByName(realIp).getHostAddress();
-      } catch (UnknownHostException ignored) {
+      } catch (UnknownHostException _) {
         // Malformed forwarded identity falls back to the actual network peer.
       }
     }

@@ -45,7 +45,7 @@ public class GatewayRoutes {
                                 Arrays.stream(InetAddress.getAllByName(trustedHost))
                                     .map(InetAddress::getHostAddress)
                                     .collect(Collectors.toSet());
-                          } catch (UnknownHostException exception) {
+                          } catch (UnknownHostException _) {
                             trusted = Set.of();
                           }
                           return AnonymousRateLimitKey.key(

@@ -15,6 +15,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -36,7 +37,7 @@ public class HttpRequestSizeFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+      HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain chain)
       throws ServletException, IOException {
     String contentType = request.getContentType();
     if (!request.getRequestURI().startsWith("/api/")
@@ -66,7 +67,7 @@ public class HttpRequestSizeFilter extends OncePerRequestFilter {
               }
 
               @Override
-              public int read(byte[] target, int offset, int length) {
+              public int read(byte @NonNull [] target, int offset, int length) {
                 return bytes.read(target, offset, length);
               }
 

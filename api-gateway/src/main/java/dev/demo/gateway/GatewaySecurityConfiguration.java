@@ -66,7 +66,7 @@ public class GatewaySecurityConfiguration {
                     .authenticated()
                     .anyExchange()
                     .denyAll())
-        .oauth2ResourceServer(resource -> resource.jwt(jwt -> {}))
+        .oauth2ResourceServer(resource -> resource.jwt(_ -> {}))
         .build();
   }
 }

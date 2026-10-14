@@ -65,5 +65,5 @@ public interface IdentityApi {
   @PutMapping("/api/private/users/{userId}/roles")
   @PreAuthorize("@customPreAuthorizer.hasAnyPermission({'USERS_MANAGE'})")
   ApiResponse<UserModel> updateRoles(
-      @PathVariable("userId") UUID userId, @Valid @RequestBody UpdateUserRolesRequest request);
+      @PathVariable UUID userId, @Valid @RequestBody UpdateUserRolesRequest request);
 }

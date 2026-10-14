@@ -10,6 +10,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 
 /** Writes directly to the real response and retains only a bounded preview. */
 final class BoundedResponseCapture extends HttpServletResponseWrapper {
@@ -45,7 +46,7 @@ final class BoundedResponseCapture extends HttpServletResponseWrapper {
             }
 
             @Override
-            public void write(byte[] bytes, int offset, int length) throws IOException {
+            public void write(byte @NonNull [] bytes, int offset, int length) throws IOException {
               delegate.write(bytes, offset, length);
               capture(bytes, offset, length);
             }
@@ -86,7 +87,7 @@ final class BoundedResponseCapture extends HttpServletResponseWrapper {
             }
 
             @Override
-            public void write(byte[] bytes, int offset, int length) throws IOException {
+            public void write(byte @NonNull [] bytes, int offset, int length) throws IOException {
               delegate.write(bytes, offset, length);
               capture(bytes, offset, length);
             }

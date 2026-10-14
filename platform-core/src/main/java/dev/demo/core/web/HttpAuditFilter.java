@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -28,7 +29,7 @@ public class HttpAuditFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+      HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain chain)
       throws ServletException, IOException {
     String path = request.getRequestURI();
     if (!properties.isEnabled()
@@ -38,7 +39,7 @@ public class HttpAuditFilter extends OncePerRequestFilter {
       return;
     }
 
-    int limit = Math.max(1, Math.min(properties.getMaxBodyBytes(), 65536));
+    int limit = Math.clamp(properties.getMaxBodyBytes(), 1, 65536);
     var wrappedRequest = new ContentCachingRequestWrapper(request, limit);
     var wrappedResponse = new BoundedResponseCapture(response, limit);
     long start = System.nanoTime();

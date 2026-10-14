@@ -29,7 +29,7 @@ public interface CatalogApi {
   /** Returns one catalog entry. */
   @GetMapping("/{id}")
   @PreAuthorize("@customPreAuthorizer.hasAnyPermission({'CATALOG_READ'})")
-  ApiResponse<CatalogItemResponse> get(@PathVariable("id") UUID id);
+  ApiResponse<CatalogItemResponse> get(@PathVariable UUID id);
 
   /** Returns a page of catalog entries. */
   @GetMapping

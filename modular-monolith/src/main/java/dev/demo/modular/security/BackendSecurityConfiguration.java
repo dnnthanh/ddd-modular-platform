@@ -14,6 +14,7 @@ import dev.demo.core.web.ApiFailure;
 import dev.demo.core.web.ApiResponse;
 import dev.demo.identity.application.RefreshTokenProperties;
 import dev.demo.identity.application.port.UserAccountPort;
+import dev.demo.identity.domain.entity.UserAccount;
 import dev.demo.identity.domain.enums.Permission;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,6 +36,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -137,13 +139,13 @@ public class BackendSecurityConfiguration {
               throw new IllegalArgumentException("Missing subject");
             }
             userId = UUID.fromString(jwt.getSubject());
-          } catch (IllegalArgumentException ex) {
+          } catch (IllegalArgumentException _) {
             throw new InvalidBearerTokenException("Invalid token subject");
           }
           var account =
               users
                   .findById(userId)
-                  .filter(user -> user.enabled())
+                  .filter(UserAccount::enabled)
                   .orElseThrow(() -> new InvalidBearerTokenException("Inactive or unknown user"));
           List<GrantedAuthority> authorities = new ArrayList<>();
           users.roles(account.id()).stream()
@@ -165,9 +167,8 @@ public class BackendSecurityConfiguration {
       ObjectMapper mapper,
       JwtAuthenticationConverter converter,
       RefreshCsrfFilter refreshCsrfFilter,
-      CorsConfigurationSource corsConfigurationSource)
-      throws Exception {
-    http.csrf(csrf -> csrf.disable())
+      CorsConfigurationSource corsConfigurationSource) {
+    http.csrf(AbstractHttpConfigurer::disable)
         .cors(cors -> cors.configurationSource(corsConfigurationSource))
         .addFilterAfter(refreshCsrfFilter, ExceptionTranslationFilter.class)
         .sessionManagement(
@@ -185,7 +186,7 @@ public class BackendSecurityConfiguration {
             handler ->
                 handler
                     .authenticationEntryPoint(
-                        (request, response, ex) ->
+                        (request, response, _) ->
                             writeProblem(
                                 request,
                                 response,
@@ -193,7 +194,7 @@ public class BackendSecurityConfiguration {
                                 HttpStatus.UNAUTHORIZED,
                                 ErrorCode.UNAUTHORIZED))
                     .accessDeniedHandler(
-                        (request, response, ex) ->
+                        (request, response, _) ->
                             writeProblem(
                                 request,
                                 response,
@@ -205,7 +206,7 @@ public class BackendSecurityConfiguration {
                 oauth
                     .jwt(jwt -> jwt.jwtAuthenticationConverter(converter))
                     .authenticationEntryPoint(
-                        (request, response, ex) ->
+                        (request, response, _) ->
                             writeProblem(
                                 request,
                                 response,

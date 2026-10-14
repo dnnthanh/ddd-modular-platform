@@ -30,5 +30,5 @@ public interface RoleApi {
   @PutMapping("/api/private/roles/{code}/permissions")
   @PreAuthorize("@customPreAuthorizer.hasAnyPermission({'USERS_MANAGE'})")
   ApiResponse<RoleModel> update(
-      @PathVariable("code") String code, @Valid @RequestBody UpdateRolePermissionsRequest request);
+      @PathVariable String code, @Valid @RequestBody UpdateRolePermissionsRequest request);
 }

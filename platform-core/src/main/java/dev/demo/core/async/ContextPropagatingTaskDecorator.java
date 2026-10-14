@@ -3,6 +3,7 @@ package dev.demo.core.async;
 import io.opentelemetry.context.Context;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.MDC;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.security.core.context.SecurityContext;
@@ -12,7 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 public class ContextPropagatingTaskDecorator implements TaskDecorator {
 
   @Override
-  public Runnable decorate(Runnable task) {
+  public Runnable decorate(@NonNull Runnable task) {
     Context otel = Context.current();
     Map<String, String> parentMdc = MDC.getCopyOfContextMap();
     SecurityContext caller = SecurityContextHolder.getContext();

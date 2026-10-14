@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,7 +58,7 @@ public class HttpAuditSanitizer {
         String name = URLDecoder.decode(entry[0], StandardCharsets.UTF_8);
         String value = entry.length > 1 ? URLDecoder.decode(entry[1], StandardCharsets.UTF_8) : "";
         safe.put(name, isSensitive(name) ? REDACTED : value);
-      } catch (IllegalArgumentException ex) {
+      } catch (IllegalArgumentException _) {
         return "[OMITTED:invalid-query]";
       }
     }
@@ -71,13 +72,13 @@ public class HttpAuditSanitizer {
     if (truncated) {
       return "[OMITTED:body-too-large]";
     }
-    if (!StringUtils.containsIgnoreCase(contentType, "json")) {
+    if (!Strings.CS.contains(contentType, "json")) {
       return "[OMITTED:non-json]";
     }
     try {
       Object decoded = objectMapper.readValue(bytes, Object.class);
       return toJson(redact(decoded, 0));
-    } catch (RuntimeException ex) {
+    } catch (RuntimeException _) {
       return "[OMITTED:invalid-json]";
     }
   }
@@ -111,7 +112,7 @@ public class HttpAuditSanitizer {
   private String toJson(Object object) {
     try {
       return objectMapper.writeValueAsString(object);
-    } catch (RuntimeException ex) {
+    } catch (RuntimeException _) {
       return "[OMITTED:serialization-failed]";
     }
   }
