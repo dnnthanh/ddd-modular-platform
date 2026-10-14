@@ -27,3 +27,5 @@ infra/lgtm/provisioning/alerting/telegram.yaml
 
 # Generated from the notification template resource
 infra/lgtm/provisioning/alerting/notification-templates.yaml
+
+.logs/

@@ -36,6 +36,11 @@ public class UserAccountPersistenceAdapter implements UserAccountPort {
   }
 
   @Override
+  public Optional<UserAccount> lockById(UUID id) {
+    return userAccountRepository.lockById(id).map(identityMapper::toDomain);
+  }
+
+  @Override
   public void insert(UserAccount user) {
     userAccountRepository.saveAndFlush(identityMapper.toEntity(user));
   }

@@ -3,12 +3,14 @@
 # Application images remain :local because they are built from this source.
 name: ddd-platform
 x-java-otel: &java_otel
-  JAVA_TOOL_OPTIONS: -javaagent:/opt/otel/javaagent.jar
+  # Instrumentation enabled; operator can disable it for the file-log fallback.
+  OTEL_ENABLED: ${OTEL_ENABLED:-true}
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
-  OTEL_TRACES_EXPORTER: otlp
-  OTEL_METRICS_EXPORTER: otlp
+  JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms64m -Xmx256m}
+  OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+  OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
   OTEL_LOGS_EXPORTER: none  # structured stdout -> Alloy -> Loki; avoid duplicate OTLP export
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
@@ -39,25 +41,28 @@ services:
     image: ddd/gateway:local
     ports:
       - "${LOCAL_BIND:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
+    user: "${APP_UID:-10001}:${APP_GID:-10001}"
     build:
       context: .
       args: {MODULE: api-gateway, RELEASE_TAG: local, GIT_REVISION: "${GIT_REVISION:-unknown}"}
     environment:
       <<: *java_otel
+      JAVA_TOOL_OPTIONS: ${GATEWAY_JAVA_OPTIONS:--Xms32m -Xmx192m}
       OTEL_SERVICE_NAME: api-gateway
       EUREKA_URL: http://eureka:8761/eureka/
       REDIS_HOST: redis
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-http://localhost:8088}
       JWT_ISSUER: ${JWT_ISSUER:-ddd-platform-dev}
       JWT_PUBLIC_KEY: file:/run/secrets/jwt-public.pem
       GATEWAY_RATE_LIMIT_REPLENISH: ${GATEWAY_RATE_LIMIT_REPLENISH:-20}
       GATEWAY_RATE_LIMIT_BURST: ${GATEWAY_RATE_LIMIT_BURST:-40}
       GATEWAY_RATE_LIMIT_TOKENS: ${GATEWAY_RATE_LIMIT_TOKENS:-1}
     volumes:
+      - ./.logs/gateway:/app/logs
       - ./secrets/jwt/public.pem:/run/secrets/jwt-public.pem:ro
     depends_on:
       eureka: {condition: service_started}
       redis: {condition: service_healthy}
-      lgtm: {condition: service_started}
     networks: [edge, application]
     healthcheck: *java_health
     restart: unless-stopped
@@ -72,7 +77,11 @@ services:
       args: {MODULE: discovery-server, RELEASE_TAG: local, GIT_REVISION: "${GIT_REVISION:-unknown}"}
     environment:
       <<: *java_otel
+      JAVA_TOOL_OPTIONS: ${EUREKA_JAVA_OPTIONS:--Xms32m -Xmx128m}
       OTEL_SERVICE_NAME: eureka-server
+    user: "${APP_UID:-10001}:${APP_GID:-10001}"
+    volumes:
+      - ./.logs/eureka:/app/logs
     networks: [application, eureka_access]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8761/actuator/health"]
@@ -91,14 +100,14 @@ services:
     build:
       context: .
       args: {MODULE: modular-monolith, RELEASE_TAG: local, GIT_REVISION: "${GIT_REVISION:-unknown}"}
-    scale: ${APP_REPLICAS:-3}
+    scale: ${APP_REPLICAS:-1}
     environment:
       <<: *java_otel
       OTEL_SERVICE_NAME: modular-app
       EUREKA_URL: http://eureka:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/modulardb
-      SPRING_DATASOURCE_USERNAME: modular
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?Set_DB_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: run
+      SPRING_DATASOURCE_PASSWORD: ${DB_RUN_PASSWORD:?Set_DB_RUN_PASSWORD}
       HTTP_AUDIT_ENABLED: ${HTTP_AUDIT_ENABLED:-true}
       HTTP_AUDIT_LOG_BODIES: ${HTTP_AUDIT_LOG_BODIES:-true}
       HTTP_AUDIT_MAX_BODY_BYTES: ${HTTP_AUDIT_MAX_BODY_BYTES:-8192}
@@ -115,15 +124,17 @@ services:
       JWT_PUBLIC_KEY: file:/run/secrets/jwt-public.pem
       JWT_PRIVATE_KEY: file:/run/secrets/jwt-private.pem
       JWT_TTL: ${JWT_TTL:-15m}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-http://localhost:8088}
       CATALOG_ITEM_CACHE_TTL: ${CATALOG_ITEM_CACHE_TTL:-5m}
     volumes:
+      - ./.logs/modular-app:/app/logs
       - ./secrets/jwt/public.pem:/run/secrets/jwt-public.pem:ro
       - ./secrets/jwt/private.pem:/run/secrets/jwt-private.pem:ro
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       eureka: {condition: service_started}
-      lgtm: {condition: service_started}
     networks: [application, data, modular_app_access]
     healthcheck: *java_health
     restart: unless-stopped
@@ -135,8 +146,12 @@ services:
       POSTGRES_USER: modular
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set_DB_PASSWORD}
       POSTGRES_DB: modulardb
+      DB_RUN_PASSWORD: ${DB_RUN_PASSWORD:?Set_DB_RUN_PASSWORD}
+      DB_BACKUP_PASSWORD: ${DB_BACKUP_PASSWORD:?Set_DB_BACKUP_PASSWORD}
     # PostgreSQL 18+ stores versioned PGDATA under this parent directory.
-    volumes: ["postgres_data:/var/lib/postgresql"]
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U modular -d modulardb"]
@@ -146,31 +161,40 @@ services:
     restart: unless-stopped
   # Runs pg_dump now and at the start of every hour; no Docker socket or host port.
   postgres-backup:
-    image: postgres:18.6-alpine
+    image: ddd/postgres-backup:local
+    build:
+      context: .
+      dockerfile: infra/backup/Dockerfile
     user: "${APP_UID:-10001}:${APP_GID:-10001}"
-    entrypoint: ["/bin/sh", "/backup/backup.sh"]
+    entrypoint: ["/bin/sh", "/backup-app/launcher.sh"]
     environment:
       PGHOST: postgres
       PGPORT: "5432"
-      PGUSER: modular
+      PGUSER: backup
       PGDATABASE: modulardb
-      PGPASSWORD: ${DB_PASSWORD:?Set_DB_PASSWORD}
+      PGPASSWORD: ${DB_BACKUP_PASSWORD:?Set_DB_BACKUP_PASSWORD}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
     volumes:
-      - ./infra/backup:/backup:ro
       - ./.backups/postgres:/backups
+      # Keep the Vietnamese text template editable without rebuilding the image.
+      - ./infra/lgtm/resources/backup-notification-template.json:/backup-app/backup-notification-template.json:ro
     tmpfs: ["/tmp"]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     depends_on:
       postgres: {condition: service_healthy}
-    networks: [data]
+    # This service is the only backup-status sender and needs HTTPS egress to
+    # Telegram. Its PostgreSQL access remains confined to the data network.
+    networks: [data, egress]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "/backup/health.sh"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD", "sh", "/backup-app/health.sh"]
+      interval: 15m
+      timeout: 60s
+      start_interval: 10s
       start_period: 1m
       retries: 2
   redis:
@@ -187,17 +211,19 @@ services:
   # Prometheus-format exporters are scraped by ops-observer, then sent to
   # the existing LGTM OTLP receiver. No separate Prometheus/Tempo stack.
   postgres-exporter:
+    profiles: ["observability"]
     image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
     environment:
       DATA_SOURCE_URI: postgres:5432/modulardb?sslmode=disable
-      DATA_SOURCE_USER: modular
-      DATA_SOURCE_PASS: ${DB_PASSWORD:?Set_DB_PASSWORD}
+      DATA_SOURCE_USER: run
+      DATA_SOURCE_PASS: ${DB_RUN_PASSWORD:?Set_DB_RUN_PASSWORD}
     depends_on:
       postgres: {condition: service_healthy}
     networks: [data, observability]
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
   redis-exporter:
+    profiles: ["observability"]
     image: oliver006/redis_exporter:v1.93.0
     environment:
       REDIS_ADDR: redis://redis:6379
@@ -209,6 +235,7 @@ services:
   # Grafana's upstream docker-otel-lgtm all-in-one bundle provides
   # Grafana, Loki, Tempo, Prometheus, and an OTLP receiver together.
   lgtm:
+    profiles: ["observability"]
     image: grafana/otel-lgtm:0.36.0
     ports:
       - "${GRAFANA_BIND:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
@@ -237,6 +264,7 @@ services:
     restart: unless-stopped
   # Restrict Docker API to inspection; do not expose raw Docker socket to Grafana.
   docker-socket-proxy:
+    profiles: ["observability"]
     image: tecnativa/docker-socket-proxy:v0.5.0
     environment:
       CONTAINERS: "1"
@@ -260,6 +288,7 @@ services:
   # Docker stdout/stderr logs cannot be inferred from Java's OTLP traces alone.
   # Alloy forwards them to the Loki already contained in lgtm.
   alloy:
+    profiles: ["observability"]
     image: grafana/alloy:v1.20.1
     command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy"]
     volumes:
@@ -270,6 +299,7 @@ services:
     restart: unless-stopped
   # Metrics and Docker lifecycle metadata are sent over OTLP HTTP to lgtm.
   ops-observer:
+    profiles: ["observability"]
     image: python:3.15.0-alpine3.24
     command: ["python", "-u", "/app/observer.py"]
     working_dir: /app
@@ -297,6 +327,8 @@ networks:
   data: {driver: bridge, internal: true}
   observability: {driver: bridge, internal: true}
   docker_api: {driver: bridge, internal: true}
+  # The backup container alone needs outbound access to Telegram's HTTPS API.
+  egress: {driver: bridge}
 volumes:
   loki_java_data: {}
   redis_data: {}

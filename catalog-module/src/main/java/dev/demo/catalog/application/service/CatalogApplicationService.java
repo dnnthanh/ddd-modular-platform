@@ -58,6 +58,6 @@ public class CatalogApplicationService implements CatalogUseCase {
   }
 
   private CatalogItemModel enrich(CatalogItemModel model) {
-    return model.withDisplayLabel(model.sku() + " / " + model.name());
+    return CatalogItemModel.withDisplayLabel(model, model.sku() + " / " + model.name());
   }
 }

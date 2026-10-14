@@ -1,0 +1,4 @@
+{
+  "success": "✅ Sao lưu PostgreSQL thành công: {filename}",
+  "failure": "🔴 Sao lưu PostgreSQL thất bại: {filename}"
+}

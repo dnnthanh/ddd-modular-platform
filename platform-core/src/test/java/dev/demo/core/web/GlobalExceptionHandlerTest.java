@@ -18,8 +18,12 @@ import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 class GlobalExceptionHandlerTest {
 
@@ -28,15 +32,11 @@ class GlobalExceptionHandlerTest {
   @Test
   void rejectedPasswordNeverAppearsInValidationLog() throws Exception {
     String secret = "private-password-probe";
-    var binding =
-        new org.springframework.validation.BeanPropertyBindingResult(new Object(), "request");
+    var binding = new BeanPropertyBindingResult(new Object(), "request");
     binding.addError(
-        new org.springframework.validation.FieldError(
-            "request", "password", secret, false, null, null, "Invalid password"));
+        new FieldError("request", "password", secret, false, null, null, "Invalid password"));
     var method = GlobalExceptionHandlerTest.class.getDeclaredMethod("request", String.class);
-    var exception =
-        new org.springframework.web.bind.MethodArgumentNotValidException(
-            new org.springframework.core.MethodParameter(method, 0), binding);
+    var exception = new MethodArgumentNotValidException(new MethodParameter(method, 0), binding);
     var logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
     var logs = new ListAppender<ILoggingEvent>();
     logs.start();

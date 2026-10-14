@@ -1,8 +1,11 @@
 package dev.demo.identity.application.service;
 
+import dev.demo.core.cache.CacheDefinition;
+import dev.demo.core.cache.CacheHelper;
 import dev.demo.core.constants.AppConstants;
 import dev.demo.core.exception.ErrorCode;
 import dev.demo.core.exception.type.BadRequestException;
+import dev.demo.core.exception.type.ConflictException;
 import dev.demo.core.exception.type.ForbiddenException;
 import dev.demo.core.exception.type.NotFoundException;
 import dev.demo.core.exception.type.UnauthorizedException;
@@ -12,6 +15,7 @@ import dev.demo.core.stereotype.UseCase;
 import dev.demo.identity.application.command.ChangeUserRolesCommand;
 import dev.demo.identity.application.command.CreateUserCommand;
 import dev.demo.identity.application.command.LoginCommand;
+import dev.demo.identity.application.model.AuthenticatedSession;
 import dev.demo.identity.application.model.TokenModel;
 import dev.demo.identity.application.model.UserModel;
 import dev.demo.identity.application.port.RolePort;
@@ -20,7 +24,6 @@ import dev.demo.identity.application.usecase.IdentityUseCase;
 import dev.demo.identity.domain.entity.UserAccount;
 import dev.demo.identity.mapper.IdentityMapper;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -28,7 +31,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -48,13 +50,45 @@ public class IdentityApplicationService implements IdentityUseCase {
   private final UserContext userContext;
   private final PasswordEncoder passwordEncoder;
   private final JwtEncoder jwtEncoder;
-  private final StringRedisTemplate redisTemplate;
-
   private final JwtProperties jwtProperties;
+  private final CacheHelper cacheHelper;
+
+  // This is the only Boolean CacheDefinition bean; generic constructor injection selects it.
+  private final CacheDefinition<Boolean> revokedJwtCache;
+
+  private final RefreshTokenApplicationService refreshTokens;
 
   @Transactional(readOnly = true)
   @Override
   public TokenModel login(LoginCommand command) {
+    return issueAccessToken(authenticateUser(command));
+  }
+
+  /** Authenticates credentials and issues a rotation-capable, cookie-only refresh secret. */
+  @Transactional
+  public AuthenticatedSession loginWithRefresh(LoginCommand command) {
+    UserAccount user = authenticateUser(command);
+    return sessionFor(user);
+  }
+
+  public AuthenticatedSession refresh(String rawRefreshToken) {
+    var rotation = refreshTokens.rotate(rawRefreshToken);
+    if (!rotation.accepted()) {
+      throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+    }
+    UserAccount user =
+        userAccountPort
+            .findById(rotation.userId())
+            .filter(UserAccount::enabled)
+            .orElseGet(
+                () -> {
+                  refreshTokens.revoke(rotation.rawToken());
+                  throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+                });
+    return new AuthenticatedSession(issueAccessToken(user), rotation.rawToken());
+  }
+
+  private UserAccount authenticateUser(LoginCommand command) {
     String username = command.username();
     String password = command.password();
     if (StringUtils.isBlank(password) || password.getBytes(StandardCharsets.UTF_8).length > 72) {
@@ -67,6 +101,15 @@ public class IdentityApplicationService implements IdentityUseCase {
     if (!user.enabled() || !passwordEncoder.matches(password, user.passwordHash())) {
       throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS);
     }
+    return user;
+  }
+
+  private AuthenticatedSession sessionFor(UserAccount user) {
+    var refresh = refreshTokens.issue(user.id());
+    return new AuthenticatedSession(issueAccessToken(user), refresh.rawToken());
+  }
+
+  private TokenModel issueAccessToken(UserAccount user) {
     Instant issued = Instant.now();
     var claims =
         JwtClaimsSet.builder()
@@ -84,15 +127,15 @@ public class IdentityApplicationService implements IdentityUseCase {
 
   /** Denylist until token expiration. Other instances see it through shared Redis. */
   @Override
-  public void logout(String jti, Instant expiresAt) {
-    if (StringUtils.isBlank(jti) || Objects.isNull(expiresAt)) {
-      throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+  public void logout(String jti, Instant expiresAt, String rawRefreshToken) {
+    if (StringUtils.isNotBlank(jti)
+        && Objects.nonNull(expiresAt)
+        // JWT validators permit 60 seconds of clock skew, so exp alone cannot decide revocation.
+        && expiresAt.plusSeconds(60).isAfter(Instant.now())) {
+      // The fixed cache TTL is JWT TTL + validator clock skew, so this survives its remaining life.
+      cacheHelper.put(revokedJwtCache, jti, Boolean.TRUE);
     }
-    // Default JWT timestamp validation allows 60 seconds of clock skew.
-    Duration ttl = Duration.between(Instant.now(), expiresAt.plusSeconds(60));
-    if (ttl.isPositive()) {
-      redisTemplate.opsForValue().set(AppConstants.RedisKeys.REVOKED_JWT_PREFIX + jti, "1", ttl);
-    }
+    refreshTokens.revoke(rawRefreshToken);
   }
 
   @Override
@@ -125,7 +168,7 @@ public class IdentityApplicationService implements IdentityUseCase {
     try {
       userAccountPort.insert(user);
     } catch (DataIntegrityViolationException ex) {
-      throw new dev.demo.core.exception.type.ConflictException(ErrorCode.DUPLICATE_USERNAME);
+      throw new ConflictException(ErrorCode.DUPLICATE_USERNAME);
     }
     userAccountPort.setRoles(user.id(), roles);
     return model(user);

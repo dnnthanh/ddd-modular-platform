@@ -12,7 +12,8 @@ class CatalogItemModelTest {
   void enrichesCopyWithoutReplacingMappedValues() {
     var id = UUID.randomUUID();
     var original = new CatalogItemModel(id, "SKU01", "Mouse", null);
-    var enriched = original.withDisplayLabel(original.sku() + " / " + original.name());
+    var enriched =
+        CatalogItemModel.withDisplayLabel(original, original.sku() + " / " + original.name());
 
     assertEquals(id, enriched.id());
     assertEquals(original.sku(), enriched.sku());

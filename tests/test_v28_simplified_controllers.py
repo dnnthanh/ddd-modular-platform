@@ -31,12 +31,12 @@ class SimplifiedControllerTests(unittest.TestCase):
         service = (app / "application/service/CatalogApplicationService.java").read_text()
         mapper = (app / "mapper/CatalogMapper.java").read_text()
         model = (app / "application/model/CatalogItemModel.java").read_text()
-        self.assertIn("model.withDisplayLabel(", service)
+        self.assertIn("CatalogItemModel.withDisplayLabel(model,", service)
         self.assertIn("catalogMapper.toModel(", service)
         self.assertNotIn("new CatalogItemModel(", service)
         self.assertNotIn('expression = "java(', mapper)
         self.assertIn("CatalogItemModel withDisplayLabel(", model)
-        self.assertIn("return new CatalogItemModel(id, sku, name, displayLabel);", model)
+        self.assertIn("return new CatalogItemModel(model.id, model.sku, model.name, displayLabel);", model)
 
     def test_catalog_port_has_no_duplicate_javadoc(self):
         code = (ROOT / "catalog-module/src/main/java/dev/demo/catalog/application/port/CatalogPort.java").read_text()

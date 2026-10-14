@@ -13,6 +13,11 @@ public interface UserAccountPort {
   /** Finds an account by its ID. */
   Optional<UserAccount> findById(UUID id);
 
+  /**
+   * Locks a user row to serialize refresh-token rotation across every token family of that user.
+   */
+  Optional<UserAccount> lockById(UUID id);
+
   /** Persists a new account. */
   void insert(UserAccount user);
 

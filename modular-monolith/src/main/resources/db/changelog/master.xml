@@ -5,4 +5,5 @@
   <include file="changes/001-catalog.xml" relativeToChangelogFile="true"/>
   <include file="changes/002-identity.xml" relativeToChangelogFile="true"/>
   <include file="changes/003-system-admin.xml" relativeToChangelogFile="true"/>
+  <include file="changes/005-refresh-tokens.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -12,4 +12,7 @@ if [ "${OTEL_SERVICE_NAME:-}" = modular-app ]; then
     fi
   fi
 fi
+if [ "${OTEL_ENABLED:-false}" = true ]; then
+  export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -javaagent:/opt/otel/javaagent.jar"
+fi
 exec java -jar /app/app.jar

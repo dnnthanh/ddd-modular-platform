@@ -1,6 +1,6 @@
 {
   "uid": "ddd-platform-ops",
-  "title": "Operations \u2014 Replicas, Builds, Images & Logs",
+  "title": "Operations — Replicas, Builds, Images & Logs",
   "tags": [
     "ddd",
     "deployment",
@@ -23,10 +23,10 @@
         "name": "service",
         "label": "Docker service",
         "type": "custom",
-        "query": "modular-app,gateway,eureka,nginx,postgres,redis,lgtm,ops-observer,alloy,postgres-exporter,redis-exporter",
+        "query": "modular-app,gateway,eureka,nginx,postgres,redis,postgres-backup,lgtm,ops-observer,alloy,postgres-exporter,redis-exporter,docker-socket-proxy",
         "current": {
-          "text": "modular-app",
-          "value": "modular-app"
+          "text": "All",
+          "value": "$__all"
         },
         "options": [],
         "multi": true,
@@ -38,7 +38,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "App replicas: running",
+      "title": "Selected services: running",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -53,7 +53,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_service_replicas_running{service=\"modular-app\"}",
+          "expr": "ddd_service_replicas_running{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -84,7 +84,7 @@
     },
     {
       "id": 2,
-      "title": "App replicas: desired",
+      "title": "Selected services: desired",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -99,7 +99,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_service_replicas_desired{service=\"modular-app\"}",
+          "expr": "ddd_service_replicas_desired{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -130,7 +130,7 @@
     },
     {
       "id": 3,
-      "title": "App replicas: healthy",
+      "title": "Selected services: healthy",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -145,7 +145,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_service_replicas_healthy{service=\"modular-app\"}",
+          "expr": "ddd_service_replicas_healthy{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -172,11 +172,12 @@
           "noValue": "N/A"
         },
         "overrides": []
-      }
+      },
+      "description": "Services without a Docker healthcheck have no healthy replicas; inspect their running status separately."
     },
     {
       "id": 4,
-      "title": "Current app restart count (sum)",
+      "title": "Selected services: restart count",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -191,7 +192,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(ddd_container_restart_count{service=\"modular-app\"}) or vector(0)",
+          "expr": "sum(ddd_container_restart_count{service=~\"$service\"}) or vector(0)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -360,7 +361,7 @@
     },
     {
       "id": 8,
-      "title": "Desired vs running vs healthy replicas",
+      "title": "Selected services: desired / running / healthy",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -375,32 +376,32 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_service_replicas_running{service=\"modular-app\"}",
+          "expr": "ddd_service_replicas_running{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "running",
+          "legendFormat": "{{service}}",
           "instant": false
         },
         {
           "refId": "B",
-          "expr": "ddd_service_replicas_desired{service=\"modular-app\"}",
+          "expr": "ddd_service_replicas_desired{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "desired",
+          "legendFormat": "{{service}}",
           "instant": false
         },
         {
           "refId": "C",
-          "expr": "ddd_service_replicas_healthy{service=\"modular-app\"}",
+          "expr": "ddd_service_replicas_healthy{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "legendFormat": "healthy",
+          "legendFormat": "{{service}}",
           "instant": false
         }
       ],
@@ -413,7 +414,7 @@
     },
     {
       "id": 9,
-      "title": "Restart count per container",
+      "title": "Restart count per selected container",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -428,7 +429,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_container_restart_count{service=\"modular-app\"}",
+          "expr": "ddd_container_restart_count{service=~\"$service\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -446,7 +447,7 @@
     },
     {
       "id": 10,
-      "title": "Running image evidence \u2014 tags, image SHA, revisions, container IDs",
+      "title": "Running image evidence — tags, image SHA, revisions, container IDs",
       "type": "table",
       "datasource": {
         "type": "prometheus",
@@ -554,7 +555,7 @@
     },
     {
       "id": 15,
-      "title": "Live application logs \u2014 click TraceID to open Tempo",
+      "title": "Live application logs — click TraceID to open Tempo",
       "type": "logs",
       "datasource": {
         "type": "loki",

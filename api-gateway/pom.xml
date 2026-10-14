@@ -10,6 +10,11 @@
   </parent>
   <artifactId>api-gateway</artifactId>
   <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- JWT PEM utility lives in platform-core. Exclude MVC: Gateway must stay reactive. -->
     <dependency>
       <groupId>dev.demo</groupId>

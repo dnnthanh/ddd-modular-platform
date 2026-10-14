@@ -5,9 +5,16 @@ Requires=docker.service
 
 [Service]
 Type=simple
-# Replace /opt/ddd-modular-platform with the absolute deployment directory.
-WorkingDirectory=/opt/ddd-modular-platform
-ExecStart=/usr/bin/python3 /opt/ddd-modular-platform/scripts/health-watchdog.py 10 30
+# Install a separate root-owned copy; never execute a user/CI-writable checkout as root.
+User=root
+Group=root
+WorkingDirectory=/
+ExecStartPre=/usr/bin/python3 -c "import os,stat; paths=['/usr/local/libexec','/usr/local/libexec/ddd-platform','/usr/local/libexec/ddd-platform/health-watchdog.py']; assert all(os.stat(p).st_uid == 0 and not (stat.S_IMODE(os.stat(p).st_mode) & 0o022) for p in paths), 'watchdog paths must be root-owned and not group/world writable'"
+ExecStart=/usr/bin/python3 /usr/local/libexec/ddd-platform/health-watchdog.py 10 30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
 Restart=always
 RestartSec=5
 # Docker group/root access is privileged: secure this host and restrict group membership.

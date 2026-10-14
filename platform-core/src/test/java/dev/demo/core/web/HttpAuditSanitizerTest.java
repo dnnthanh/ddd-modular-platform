@@ -3,6 +3,7 @@ package dev.demo.core.web;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -18,8 +19,7 @@ class HttpAuditSanitizerTest {
         "items":[{"name":"Coffee","email":"alice@example.com"}]}
         """;
     String result =
-        sanitizer.body(
-            json.getBytes(java.nio.charset.StandardCharsets.UTF_8), "application/json", false);
+        sanitizer.body(json.getBytes(StandardCharsets.UTF_8), "application/json", false);
 
     assertTrue(result.contains("A-001"));
     assertTrue(result.contains("[REDACTED]"));
@@ -35,7 +35,7 @@ class HttpAuditSanitizerTest {
     assertFalse(result.contains("abc123"));
     assertTrue(
         sanitizer
-            .body("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8), "application/json", true)
+            .body("{}".getBytes(StandardCharsets.UTF_8), "application/json", true)
             .contains("OMITTED"));
   }
 }

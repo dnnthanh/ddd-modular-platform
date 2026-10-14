@@ -9,8 +9,10 @@ import dev.demo.identity.application.command.LoginCommand;
 import dev.demo.identity.application.command.UpdateRolePermissionsCommand;
 import dev.demo.identity.application.model.RoleModel;
 import dev.demo.identity.application.model.UserModel;
+import dev.demo.identity.domain.entity.RefreshToken;
 import dev.demo.identity.domain.entity.RoleDefinition;
 import dev.demo.identity.domain.entity.UserAccount;
+import dev.demo.identity.infrastructure.persistence.entity.RefreshTokenEntity;
 import dev.demo.identity.infrastructure.persistence.entity.RoleEntity;
 import dev.demo.identity.infrastructure.persistence.entity.UserAccountEntity;
 import dev.demo.identity.interfaces.dto.request.CreateRoleRequest;
@@ -26,6 +28,10 @@ import org.mapstruct.Mapping;
 /** All Identity conversions in one Spring-managed MapStruct mapper. */
 @Mapper(config = CommonMapperConfig.class)
 public interface IdentityMapper extends EntityMapper<UserAccount, UserAccountEntity, UserModel> {
+
+  RefreshToken toDomain(RefreshTokenEntity source);
+
+  RefreshTokenEntity toRefreshTokenEntity(RefreshToken source);
 
   /** Converts a domain account into a JPA entity; role assignment is handled separately. */
   @Override

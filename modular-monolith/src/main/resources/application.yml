@@ -79,6 +79,14 @@ app:
       private-key: ${JWT_PRIVATE_KEY:file:./secrets/jwt/private.pem}
       issuer: ${JWT_ISSUER:ddd-platform-dev}
       ttl: ${JWT_TTL:15m}
+    refresh:
+      ttl: ${REFRESH_TOKEN_TTL:30d}
+    cookies:
+      secure: ${AUTH_COOKIE_SECURE:true}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
+      path: ${AUTH_COOKIE_PATH:/api}
+      domain: ${AUTH_COOKIE_DOMAIN:}
+      allowed-origins: ${AUTH_ALLOWED_ORIGINS:http://localhost:8088}
     bootstrap-admin:
       username: ${BOOTSTRAP_ADMIN_USERNAME:}
       password: ${BOOTSTRAP_ADMIN_PASSWORD:}

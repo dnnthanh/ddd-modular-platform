@@ -1,3 +1,6 @@
+> Mặc định: 1 replica, bật OTEL và monitoring, log Java qua stdout/Loki.
+> Profile `file-logs` dành cho fallback ghi file. Xem [cấu hình hiện tại](docs/observability.md).
+
 # DDD Modular Platform — Java 25 / Spring Boot 4 (v26 Spring 7 Status & Jackson 3 Fix)
 > Current observability setup: LGTM default datasources only. Alloy collects Java
 > logs with the `service_name` stream label; infrastructure is metrics-only.
@@ -6,7 +9,7 @@
 
 Starter project for **DDD Modular Monolith**, Maven multi-module, Spring Cloud Gateway, Eureka, PostgreSQL, Redis, Liquibase, RS256 JWT and **grafana/otel-lgtm**. Includes JVM/Hikari, PostgreSQL, Redis metrics and Grafana alert rules. One `modular-app` Compose service scales to N identical JVM containers. **This is a learning/reference stack, not a security-certified production distribution.**
 
-> **Verification scope (v21):** The generation environment has JDK 21 but **no Maven, Docker or JDK 25**. Syntax and consistency checks were performed, but **`mvn clean verify`, Java 25 compilation and Docker integration have not been successfully run here**. Run them in your environment before deploying. Framework version compatibility cannot be verified against current upstream documentation while network search is unavailable.
+> **Current verification:** Docker JDK 25 `mvn spotless:check verify` passes (68 Java tests); Python infrastructure suite passes (78 tests). Docker services, Grafana query proxy, PostgreSQL/Redis metrics, Java log labels and backup health were checked locally. IntelliJ still reports project-wide findings; build success does not mean all IDE/security findings are resolved. Older version notes below describe their original verification scope.
 
 ## 1. Architecture
 
@@ -33,7 +36,7 @@ Alloy ─Docker stdout/stderr─► Loki inside LGTM
 Grafana Alerting ─► optional Telegram contact point
 ```
 
-Nginx/Gateway are single-instance **SPOFs** in this tutorial. Eureka is not on the normal business request path. For this local test setup, backend/database/telemetry ports are published on loopback using `.env`; see `docs/observability.md`. Frontend edge is localhost HTTP by default; public HTTPS/TLS, managed secrets, key rotation, reliable backups, WAF/DDoS control, HA and audited RBAC are necessary before production.
+Nginx/Gateway are single-instance **SPOFs** in this tutorial. Eureka is not on the normal business request path. For this local test setup, API/Grafana and direct Java ports are published on loopback using `.env`; database/telemetry ports remain internal; see `docs/observability.md`. Frontend edge is localhost HTTP by default; public HTTPS/TLS, managed secrets, key rotation, reliable backups, WAF/DDoS control, HA and audited RBAC are necessary before production.
 
 ## 2. Files, conventions and DDD boundaries
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-  <springProperty scope="context" name="applicationName"
-                  source="spring.application.name" defaultValue="modular-app"/>
+  <springProperty scope="context" name="applicationName" source="spring.application.name" defaultValue="modular-app"/>
+  <!-- Default stdout is collected by Alloy; preserve full exception stacktraces. -->
   <appender name="JSON_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
       <customFields>{"service_name":"${applicationName}"}</customFields>
@@ -12,4 +12,26 @@
   <root level="${LOG_LEVEL:-INFO}">
     <appender-ref ref="JSON_STDOUT"/>
   </root>
+  <!-- Optional file output if monitoring is unavailable: Spring profile file-logs. -->
+  <springProfile name="file-logs">
+  <!-- Per-instance files prevent multiple replicas writing the same rolling file. -->
+  <property name="logDirectory" value="${LOG_DIRECTORY:-/app/logs}"/>
+  <property name="instance" value="${HOSTNAME:-local}"/>
+  <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${logDirectory}/${applicationName}-${instance}.json</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${logDirectory}/${applicationName}-${instance}.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+      <maxFileSize>${LOG_MAX_FILE_SIZE:-20MB}</maxFileSize>
+      <maxHistory>${LOG_MAX_HISTORY:-7}</maxHistory>
+      <totalSizeCap>${LOG_TOTAL_SIZE_CAP:-128MB}</totalSizeCap>
+    </rollingPolicy>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>{"service_name":"${applicationName}"}</customFields>
+      <includeMdc>true</includeMdc>
+      <includeKeyValuePairs>true</includeKeyValuePairs>
+    </encoder>
+  </appender>
+
+    <root level="${LOG_LEVEL:-INFO}"><appender-ref ref="JSON_FILE"/></root>
+  </springProfile>
 </configuration>

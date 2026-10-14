@@ -22,6 +22,7 @@ import org.springframework.data.domain.Page;
 public interface CatalogMapper extends EntityMapper<CatalogItem, CatalogEntity, CatalogItemModel> {
 
   /** Null values in patch input do not overwrite fields on the JPA entity. */
+  @Mapping(target = "id", ignore = true)
   void applyPatch(CatalogPatchModel source, @MappingTarget CatalogEntity target);
 
   /** Converts domain objects to application models; enrichment happens in service. */

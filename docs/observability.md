@@ -1,96 +1,70 @@
-# Observability hiện tại
+# Local và VPS
 
-Dùng datasource mặc định trong `grafana/otel-lgtm:0.36.0`: Prometheus, Loki,
-Tempo, Pyroscope. Bộ `DDD ...` được comment tại
-`infra/lgtm/provisioning/datasources.yaml`, không mount. File migration xóa datasource trùng đã hoàn thành và được gỡ bỏ. Dashboard và 17 alert rules cùng folder `DDD Platform`.
+Mặc định Compose bật profile `observability`, `OTEL_ENABLED=true` và chạy
+1 replica ứng dụng. Java gửi metrics/traces vào LGTM; PostgreSQL, Redis và
+các container được theo dõi qua exporters/observer. Dashboard Operations mặc định
+chọn tất cả Docker service, có thể lọc riêng từng service.
 
-## Logs và quyền
+## Logback
 
-Alloy chỉ thu stdout/stderr từ gateway, modular-app và eureka của project.
-Loki chỉ index `service_name`: `api-gateway`, `modular-app`, `eureka-server`.
-Nội dung log Java, ERROR và exception vẫn giữ theo cấu hình ứng dụng.
-Không thu log Nginx/PostgreSQL/Redis/exporter/observer/Alloy/LGTM vào Loki;
-những service này vẫn được theo dõi bằng metrics. Panel log hạ tầng được bỏ.
-Loki Java dùng volume riêng; dữ liệu log cũ ở volume LGTM đã được xóa theo yêu cầu.
+Mặc định Logback ghi JSON và đầy đủ exception ra stdout để Alloy đưa vào Loki.
+Chỉ thu log ba service Java, chỉ index label `service_name`; hạ tầng chỉ monitor
+metrics. Không ghi file ứng dụng mặc định.
 
-Grafana OSS Viewer có thể query các datasource trong organization. Dropdown hoặc
-folder permission không giới hạn dữ liệu theo `service_name`. Setup này dùng
-phương án fallback người dùng chọn: chỉ ingest log Java, không tạo org, tenant,
-account hay phân quyền custom. Viewer có thể đọc **cả ba service Java**, không có
-phân quyền từng service; metrics/trace vẫn tuân theo quyền datasource mặc định.
-Tài liệu: https://grafana.com/docs/grafana/latest/administration/data-source-management/
+Khi không chạy monitoring, đặt `COMPOSE_PROFILES=` và `OTEL_ENABLED=false`,
+exporters Java thành `none`; bật Spring profile `file-logs` để lưu file tại
+`.logs/gateway`, `.logs/eureka`, `.logs/modular-app`. File fallback xoay theo
+ngày/kích thước (20 MB/file, 7 ngày, tối đa 128 MB/instance).
+Giới hạn request JSON 1 MB và audit body preview 8 KB không giới hạn log Java.
 
-## Ports
+## Database
 
-Chỉ API edge 8088, Grafana 3000, gateway 19080, Eureka 8761 và port riêng cho 3
-replica app trong `.env` được publish trên 127.0.0.1. Đã đóng host port PostgreSQL,
-Redis, exporters, Docker socket proxy, Alloy, OTLP, Prometheus, Loki, Tempo,
-Pyroscope. Direct Java ports là debug local, bỏ qua kiểm soát Nginx/Gateway.
-Không phải cấu hình public/VPS; Docker API bên trong vẫn cần collector access.
+Hai tài khoản dịch vụ: `run` chạy ứng dụng và Liquibase, `backup` chỉ đọc để dump.
+`run` sở hữu schema nên có DDL cần cho Liquibase, nhưng không có superuser,
+CREATE ROLE hoặc CREATE DATABASE. Không tạo user Liquibase/exporter riêng.
+PostgreSQL vẫn có tài khoản quản trị bootstrap và các role hệ thống; credential
+quản trị không cấp cho ứng dụng/backup. `.env` là cấu hình chính và không commit.
 
-## Cleanup và kiểm chứng
+## Backup và Telegram
 
-Đã dọn thư mục `target`, Python `__pycache__`, log/probe/snapshot cũ của Codex
-trong `.deploy/review`, `.deploy/security-fixes`, `.deploy/feedback-fixes`.
-Giữ `.env`, JWT secrets, source/tests/infra, IDE config, libs OpenTelemetry,
-`.deploy/state.env` và lịch sử deployment dùng bởi scripts/observer.
+Backup chạy ngay khi khởi động, rồi đầu mỗi giờ khi Docker đang chạy, giữ 7 ngày
+trong `.backups/postgres/`. Dump custom-format phải đọc được và checksum hợp lệ
+trước khi ghi marker hoàn tất; chỉ sau đó mới xóa backup quá hạn. `flock` tránh
+chạy chồng; lỗi backup không xóa bản cũ. Healthcheck kiểm tra tuổi marker và checksum.
 
-Kiểm chứng: Compose config hợp lệ; Alloy validate pass; 68 test Python pass.
-Grafana có 4 datasource mặc định, một folder project với 4 dashboard và 17 alert
-rules. Query Loki trả đúng ba service Java và chỉ label `service_name`; mọi
-container running, các service có healthcheck đều healthy. Không build lại Java
-vì thay đổi này chỉ sửa observability/config/dashboard và dọn build output.
+Một process Python nhỏ trong chính container backup gửi kết quả thành công/lỗi
+qua Telegram; không cần monitor hay thêm container. Template tiếng Việt nằm tại
+`infra/lgtm/resources/backup-notification-template.json`. Token và chat ID ở `.env`.
+Outbox và trạng thái retry lưu local, gửi có retry và không ảnh hưởng kết quả
+dump. Event chỉ bị xóa sau khi Telegram nhận; có thể gửi lặp một tin nếu process
+chết sau khi Telegram nhận nhưng trước khi xóa event.
+Backup chứa dữ liệu nhạy cảm, quyền file 0600/thư mục 0700, không vào Git/image.
+Bản lưu cùng host không bảo vệ khỏi mất ổ đĩa; muốn bảo vệ trường hợp đó cần
+sao chép ra nơi khác. Dump chứa `modulardb`, không chứa role/config toàn cluster.
 
-## Telegram
+## Monitoring
 
-Điền `TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` trong `.env`, rồi chạy
-`./scripts/deploy.sh up`. Script tạo `alerting/telegram.yaml` từ template chỉ
-chứa tham chiếu biến môi trường; file sinh ra và `.env` không được commit.
-`.env.example` giữ cùng cấu hình local nhưng chỉ chứa mật khẩu mẫu, không có
-token hay Chat ID thật.
+`docker compose up -d` bật monitoring từ `.env`. Sau khi đổi `OTEL_ENABLED`
+hoặc exporter, recreate các service Java. Grafana dùng datasource mặc định LGTM.
+Grafana OSS Viewer không có phân quyền từng service trong cấu hình này; vì vậy
+Loki chỉ nhận log Java, không nhận log Redis/PostgreSQL hay hạ tầng khác.
 
-Webhook của bot và gửi cảnh báo bằng `sendMessage` có thể dùng cùng nhau.
-Không gọi `deleteWebhook` để lấy ID: gửi `/start` trong chat riêng hoặc
-`/start@thanhdn28_bot` trong group có bot, rồi đọc `message.chat.id` từ payload
-webhook. Với group, cũng có thể mở Telegram Web `/a/` và lấy số sau `#`
-trên URL, giữ dấu âm. `getUpdates` không hoạt động khi webhook còn cấu hình.
+Template cảnh báo Grafana ở `infra/lgtm/resources/notification-templates.yaml`.
+Sửa rồi chạy `./scripts/deploy.sh alerts`.
+`GRAFANA_ROOT_URL` mặc định localhost; trên VPS cần đặt URL HTTPS truy cập thực tế.
+URL không tự mở port, thiết lập TLS hoặc reverse proxy.
 
-Rule scrape metrics chọn label `service` do OTLP bridge cung cấp. Counter qua
-bridge có hậu tố `_total`; các query PostgreSQL/HTTP/JVM đã dùng tên thực tế.
-HTTP 5xx trả zero theo service khi chưa có lỗi, tránh NoData giả.
+## Cookie và blacklist
 
-## Template tiếng Việt và URL
+Blacklist dùng `CacheHelper` với cache Boolean có TTL JWT + 60 giây; Redis có
+AOF và volume. Deploy chuyển các key blacklist cũ sang cache mới trước khi
+khởi động ứng dụng mới, không làm sống lại token đã logout.
 
-Sửa `infra/lgtm/resources/notification-templates.yaml`: đây là resource nguồn được
-`deploy.sh` chép vào thư mục provisioning, file sinh ra không commit. Telegram contact point gọi template
-`ddd.telegram.vi`, dùng plain text và thời gian Asia/Ho_Chi_Minh. Tóm tắt và
-hướng xử lý của 17 rule được đặt tiếng Việt trong `alerting/rules.yaml`.
-Chạy `./scripts/deploy.sh alerts` để sinh lại provisioning và recreate `lgtm`,
-không build lại Java.
-
-`GRAFANA_ROOT_URL` trong `.env` mặc định `http://localhost:3000/`. Trên VPS,
-đặt thành địa chỉ Grafana truy cập thực tế, ví dụ `https://grafana.example.com/`,
-rồi recreate `lgtm`. Link không tự đổi theo host build; URL chỉ tạo link, không
-tự mở port hoặc cấu hình reverse proxy/TLS. Email chưa được bật.
-
-## Backup PostgreSQL mỗi giờ
-
-Service `postgres-backup` tạo dump ngay khi khởi động, rồi vào đầu mỗi giờ khi
-Docker đang chạy. Nếu dump kéo dài qua giờ hẹn, chạy bù một lần sau khi dump
-trước kết thúc; không chạy chồng nhiều dump. File nằm trong `.backups/postgres/`, định dạng custom của
-PostgreSQL, kèm checksum SHA-256. `BACKUP_RETENTION_DAYS=7` trong `.env` điều
-khiển thời gian lưu. Chỉ publish archive sau khi dump, đọc danh mục và kiểm tra checksum thành
-công; dump thất bại không xóa backup cũ. Các lần chạy được khóa bằng flock,
-tên file có timestamp và PID để tránh ghi đè khi gọi thủ công. Healthcheck
-kiểm tra marker hoàn thành và cặp archive/checksum, báo unhealthy nếu hơn
-125 phút chưa có backup thành công. Máy ngủ hoặc Docker dừng thì job không chạy.
-
-`.backups/` bị loại khỏi Git và Docker build. Backup có dữ liệu nhạy cảm, được
-tạo với quyền 0600 trong thư mục 0700. Bản lưu hiện ở cùng host: cần sao chép
-ra nơi khác nếu muốn phục hồi khi mất host/ổ đĩa. Không tự restore vào DB chính.
-
-Tạo thêm một bản thủ công: `docker compose exec -T postgres-backup sh /backup/backup.sh once`.
-Kiểm tra checksum: chạy `sha256sum -c <ten-file>.dump.sha256` tại thư mục backup.
-Khôi phục vào database trống bằng `pg_restore --no-owner --no-acl`; tạo database
-đích trước, kiểm chứng dữ liệu rồi mới quyết định thay DB chính. Dump này chứa
-`modulardb`, không chứa tài khoản/role toàn cluster hoặc PostgreSQL config.
+Refresh token 32 byte ngẫu nhiên được trả bằng cookie HttpOnly. DB chỉ lưu hash
+SHA-256, giữ hạn tuyệt đối 30 ngày; mỗi refresh xoay token và replay thu hồi family.
+Access token trả trong JSON để FE giữ trong bộ nhớ. Refresh/cookie logout cần
+Origin/Referer thuộc `AUTH_ALLOWED_ORIGINS`; Gateway và backend dùng cùng allowlist.
+HTTP local dùng `AUTH_COOKIE_SECURE=false`; lên VPS HTTPS phải đặt true.
+FE khác origin dùng `credentials: include`, đúng origin được cho phép; SameSite
+Strict phù hợp cùng site, không tự đổi sang None cho mọi trường hợp.
+Không ghi cookie/token vào log và không lưu refresh token gốc vào DB.

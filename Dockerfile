@@ -3,7 +3,7 @@ FROM maven:3.9.11-eclipse-temurin-25 AS build
 WORKDIR /src
 COPY . .
 ARG MODULE
-RUN mvn -B -ntp -pl "${MODULE}" -am -DskipTests package && \
+RUN --mount=type=cache,target=/root/.m2,sharing=locked mvn -B -ntp -pl "${MODULE}" -am -DskipTests package && \
     mkdir -p /out && \
     find "/src/${MODULE}/target" -maxdepth 1 -name '*.jar' ! -name '*.original' ! -name '*-sources.jar' | head -1 | xargs -I{} cp {} /out/app.jar
 

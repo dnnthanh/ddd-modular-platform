@@ -3,6 +3,8 @@ package dev.demo.modular.security;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import dev.demo.core.cache.CacheDefinition;
+import dev.demo.core.cache.CacheHelper;
 import dev.demo.core.constants.AppConstants;
 import dev.demo.core.exception.ErrorCode;
 import dev.demo.core.i18n.MessageResolver;
@@ -10,6 +12,7 @@ import dev.demo.core.security.jwt.JwtKeyResources;
 import dev.demo.core.security.jwt.JwtProperties;
 import dev.demo.core.web.ApiFailure;
 import dev.demo.core.web.ApiResponse;
+import dev.demo.identity.application.RefreshTokenProperties;
 import dev.demo.identity.application.port.UserAccountPort;
 import dev.demo.identity.domain.enums.Permission;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,10 +26,11 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -48,12 +52,20 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.ExceptionTranslationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.LocaleResolver;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({
+  JwtProperties.class,
+  RefreshTokenProperties.class,
+  AuthCookieProperties.class
+})
 @RequiredArgsConstructor
 public class BackendSecurityConfiguration {
 
@@ -61,7 +73,25 @@ public class BackendSecurityConfiguration {
   private final LocaleResolver localeResolver;
 
   @Bean
-  JwtDecoder jwtDecoder(JwtProperties properties, StringRedisTemplate redis) {
+  CacheDefinition<Boolean> revokedJwtCache(JwtProperties properties) {
+    return new CacheDefinition<>(
+        "auth:revoked-jwt", Boolean.class, properties.ttl().plusSeconds(60));
+  }
+
+  /** Spring Security positions this filter; prevent the servlet container from adding it again. */
+  @Bean
+  FilterRegistrationBean<RefreshCsrfFilter> refreshCsrfFilterRegistration(
+      RefreshCsrfFilter refreshCsrfFilter) {
+    var registration = new FilterRegistrationBean<>(refreshCsrfFilter);
+    registration.setEnabled(false);
+    return registration;
+  }
+
+  @Bean
+  JwtDecoder jwtDecoder(
+      JwtProperties properties,
+      CacheHelper cacheHelper,
+      @Qualifier("revokedJwtCache") CacheDefinition<Boolean> revokedJwtCache) {
     var key = (RSAPublicKey) JwtKeyResources.readPublicKey(properties.publicKey());
     var decoder =
         NimbusJwtDecoder.withPublicKey(key).signatureAlgorithm(SignatureAlgorithm.RS256).build();
@@ -71,8 +101,10 @@ public class BackendSecurityConfiguration {
             jwt -> {
               String jti = jwt.getId();
               if (StringUtils.isBlank(jti)
-                  || Boolean.TRUE.equals(
-                      redis.hasKey(AppConstants.RedisKeys.REVOKED_JWT_PREFIX + jti))) {
+                  || cacheHelper
+                      .get(revokedJwtCache, jti)
+                      .filter(Boolean::booleanValue)
+                      .isPresent()) {
                 return OAuth2TokenValidatorResult.failure(
                     new OAuth2Error("invalid_token", "JWT revoked or missing jti", null));
               }
@@ -129,9 +161,15 @@ public class BackendSecurityConfiguration {
 
   @Bean
   SecurityFilterChain backendChain(
-      HttpSecurity http, ObjectMapper mapper, JwtAuthenticationConverter converter)
+      HttpSecurity http,
+      ObjectMapper mapper,
+      JwtAuthenticationConverter converter,
+      RefreshCsrfFilter refreshCsrfFilter,
+      CorsConfigurationSource corsConfigurationSource)
       throws Exception {
     http.csrf(csrf -> csrf.disable())
+        .cors(cors -> cors.configurationSource(corsConfigurationSource))
+        .addFilterAfter(refreshCsrfFilter, ExceptionTranslationFilter.class)
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
@@ -175,6 +213,18 @@ public class BackendSecurityConfiguration {
                                 HttpStatus.UNAUTHORIZED,
                                 ErrorCode.UNAUTHORIZED)));
     return http.build();
+  }
+
+  @Bean
+  CorsConfigurationSource corsConfigurationSource(AuthCookieProperties properties) {
+    CorsConfiguration configuration = new CorsConfiguration();
+    configuration.setAllowedOrigins(properties.allowedOrigins());
+    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+    configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Origin"));
+    configuration.setAllowCredentials(true);
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/api/**", configuration);
+    return source;
   }
 
   private void writeProblem(

@@ -1,5 +1,6 @@
 package dev.demo.core.async;
 
+import java.util.concurrent.ThreadPoolExecutor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +20,7 @@ public class ApplicationThreadPoolConfiguration {
     executor.setMaxPoolSize(properties.maxSize());
     executor.setQueueCapacity(properties.queueCapacity());
     executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
-    executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
     executor.setWaitForTasksToCompleteOnShutdown(true);
     executor.setAwaitTerminationSeconds(30);
     executor.initialize();

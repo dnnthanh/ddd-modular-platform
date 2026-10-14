@@ -13,3 +13,5 @@ config/code-style
 secrets/
 
 .backups/
+
+.logs/

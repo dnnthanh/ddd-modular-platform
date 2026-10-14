@@ -1,6 +1,7 @@
 """Offline tests: instrumentation emits useful fields but never Docker env secrets."""
 import importlib.util
 import json
+import os
 import pathlib
 import sys
 import tempfile
@@ -70,6 +71,30 @@ class ObserverTests(unittest.TestCase):
 
     def test_escape_labels(self):
         self.assertEqual(obs.escaped('abc"\\\n'), 'abc\\"\\\\\\n')
+
+    def test_observer_emits_service_metrics_for_database_and_redis(self):
+        cid = 'a' * 64
+        inspect = {
+            'Id': cid, 'Name': '/ddd-platform-postgres-1', 'Image': 'sha256:' + 'b' * 64,
+            'Created': '2026-10-13T11:00:00Z', 'RestartCount': 0,
+            'Config': {'Image': 'postgres:18', 'Labels': {'com.docker.compose.service': 'postgres'}},
+            'State': {'Status': 'running', 'Running': True, 'StartedAt': '2026-10-13T11:00:00Z',
+                      'Health': {'Status': 'healthy'}},
+        }
+        def mock_docker(route):
+            if route.startswith('/containers/json'):
+                return [{'Id': cid}]
+            if route.startswith('/containers/'):
+                return inspect
+            if route.startswith('/images/'):
+                return {'Id': inspect['Image']}
+            raise AssertionError('unknown route ' + route)
+        with patch.object(obs, 'docker_get', side_effect=mock_docker), \
+             patch.object(obs, 'event'), patch.object(obs, 'export_otlp_metrics'), \
+             patch.object(obs.scrape_metrics, 'export'):
+            obs.refresh()
+        self.assertIn('ddd_service_replicas_running{service="postgres"} 1', obs.last_metrics)
+        self.assertIn('ddd_service_replicas_running{service="redis"} 0', obs.last_metrics)
 
     def test_deployment_event_whitelist(self):
         import subprocess

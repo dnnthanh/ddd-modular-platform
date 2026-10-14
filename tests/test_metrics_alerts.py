@@ -44,6 +44,21 @@ class MetricsAlertTests(unittest.TestCase):
                          compose['services']['lgtm']['environment']['GF_PATHS_PROVISIONING'])
         self.assertNotIn('ddd-prometheus', (ROOT/'infra/lgtm/provisioning/alerting/rules.yaml').read_text())
 
+    def test_backup_notifier_owns_telegram_secret_and_egress(self):
+        compose = yaml.safe_load((ROOT/'compose.yaml').read_text())
+        observer = compose['services']['ops-observer']
+        backup = compose['services']['postgres-backup']
+        self.assertIn('TELEGRAM_BOT_TOKEN', backup['environment'])
+        self.assertIn('TELEGRAM_CHAT_ID', backup['environment'])
+        self.assertIn('egress', backup['networks'])
+        self.assertIn('./.backups/postgres:/backups', backup['volumes'])
+        self.assertIn(
+            './infra/lgtm/resources/backup-notification-template.json:/backup-app/backup-notification-template.json:ro',
+            backup['volumes'])
+        self.assertNotIn('TELEGRAM_BOT_TOKEN', observer['environment'])
+        self.assertNotIn('egress', observer['networks'])
+        self.assertFalse(any('/backups' in volume for volume in observer['volumes']))
+
     def test_alert_rules_have_unique_ids_and_telegram_is_opt_in(self):
         alert = yaml.safe_load((ROOT/'infra/lgtm/provisioning/alerting/rules.yaml').read_text())
         rules = alert['groups'][0]['rules']

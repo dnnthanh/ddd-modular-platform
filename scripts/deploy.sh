@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local source -> Docker image -> Compose containers.
-# All inspection (health, image IDs, trace/logs, old/new containers) is in Grafana.
+# Docker health works independently; file logs are an optional fallback profile.
 set -Eeuo pipefail
 umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,13 +21,22 @@ DDD Modular Monolith — source-based deployment (Docker Compose)
   ./scripts/deploy.sh help
 
 When code changes: run './scripts/deploy.sh up' again. No image-tag deploy or rollback.
-Operations: Grafana http://127.0.0.1:3000 (replicas, restarts, image SHA, logs, traces).
+Operations: docker compose ps; docker compose logs. Monitoring is enabled by .env.
+Optional file fallback: Spring profile file-logs writes under .logs/.
 USAGE
 }
 err(){ echo "ERROR: $*" >&2; exit 1; }
 need(){ command -v "$1" >/dev/null || err "missing command: $1"; }
 valid_num(){ [[ "$1" =~ ^[1-9][0-9]*$ ]] && (( 10#$1 <= 50 )) || err 'replica count must be 1..50'; }
-setup_dirs(){ mkdir -p "$HISTORY_DIR" "$ROOT/.backups/postgres"; chmod 700 "$STATE_DIR" "$HISTORY_DIR" "$ROOT/.backups/postgres"; }
+setup_dirs(){
+  local log_dir
+  mkdir -p "$HISTORY_DIR" "$ROOT/.backups/postgres" \
+    "$ROOT/.logs/gateway" "$ROOT/.logs/eureka" "$ROOT/.logs/modular-app"
+  chmod 700 "$STATE_DIR" "$HISTORY_DIR" "$ROOT/.backups/postgres"
+  for log_dir in "$ROOT/.logs/gateway" "$ROOT/.logs/eureka" "$ROOT/.logs/modular-app"; do
+    chmod 700 "$log_dir"
+  done
+}
 
 init(){
   need python3
@@ -42,19 +51,27 @@ p=sys.argv[1]
 with open(p, encoding='utf-8') as f: s=f.read()
 keys={
   'DB_PASSWORD':secrets.token_urlsafe(36),
+  'DB_RUN_PASSWORD':secrets.token_urlsafe(36),
+  'DB_BACKUP_PASSWORD':secrets.token_urlsafe(36),
   'GRAFANA_ADMIN_PASSWORD':secrets.token_urlsafe(36),
   'BOOTSTRAP_ADMIN_PASSWORD':secrets.token_urlsafe(24),
 }
 lines=s.splitlines()
+placeholders={'', 'CHANGE_ME', 'example-change-me-2026'}
 found=set()
 for i,line in enumerate(lines):
   for name,secret in keys.items():
     if line.startswith(name+'='):
       found.add(name)
-      if line.partition('=')[2] in ('', 'CHANGE_ME', 'example-change-me-2026'):
+      if line.partition('=')[2] in placeholders:
         lines[i]=name+'='+secret
 for name,secret in keys.items():
   if name not in found: lines.append(name+'='+secret)
+deprecated={
+  'DB_CLUSTER_ADMIN_PASSWORD', 'DB_MIGRATOR_PASSWORD', 'DB_APP_PASSWORD',
+  'DB_EXPORTER_PASSWORD',
+}
+lines=[line for line in lines if line.partition('=')[0] not in deprecated]
 with open(p,'w',encoding='utf-8') as f: f.write('\n'.join(lines)+'\n')
 PY
   # A 0600 private PEM file is not readable by a different UID inside a
@@ -186,7 +203,17 @@ do_up(){
     || err 'JWT keys missing. Run ./scripts/generate-jwt-keys.sh once before deploy.'
   # Build first so a build failure does not change the desired replica count.
   # Re-using the stable :local image tag is intentional; Grafana compares real image SHA.
-  compose build gateway eureka modular-app
+  compose build gateway eureka modular-app postgres-backup
+  # An existing PostgreSQL volume does not rerun docker-entrypoint-initdb.d.
+  # Provision accounts through the database container; passwords stay in its
+  # environment and never appear in a host command line.
+  compose up -d postgres
+  compose exec -T postgres sh -c 'exec psql --no-psqlrc --set=ON_ERROR_STOP=1 --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+    < "$ROOT/infra/postgres/init/provision-roles.psql"
+  # Preserve legacy revoked tokens before switching the shared typed cache.
+  compose up -d redis
+  compose stop modular-app
+  "$ROOT/scripts/migrate-revoked-tokens.sh"
   write_replicas "$n"
   change up "source-build replicas=$n revision=$GIT_REVISION" compose up -d --no-build --scale "modular-app=$n"
 }

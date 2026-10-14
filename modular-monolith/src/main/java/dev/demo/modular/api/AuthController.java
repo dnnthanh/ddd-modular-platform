@@ -1,6 +1,7 @@
 package dev.demo.modular.api;
 
 import dev.demo.core.web.ApiResponse;
+import dev.demo.identity.application.RefreshTokenProperties;
 import dev.demo.identity.application.model.TokenModel;
 import dev.demo.identity.application.model.UserModel;
 import dev.demo.identity.application.usecase.IdentityUseCase;
@@ -9,6 +10,9 @@ import dev.demo.identity.interfaces.dto.request.LoginRequest;
 import dev.demo.identity.interfaces.dto.request.UpdateUserRolesRequest;
 import dev.demo.identity.mapper.IdentityMapper;
 import dev.demo.modular.api.contract.IdentityApi;
+import dev.demo.modular.security.AuthCookieWriter;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,15 +24,40 @@ public class AuthController implements IdentityApi {
 
   private final IdentityUseCase identityUseCase;
   private final IdentityMapper identityMapper;
+  private final AuthCookieWriter cookies;
+  private final RefreshTokenProperties refreshProperties;
 
   @Override
-  public ApiResponse<TokenModel> login(LoginRequest request) {
-    return ApiResponse.ok(identityUseCase.login(identityMapper.toCommand(request)));
+  public ApiResponse<TokenModel> login(LoginRequest request, HttpServletResponse response) {
+    var session = identityUseCase.loginWithRefresh(identityMapper.toCommand(request));
+    cookies.writeRefreshToken(
+        response, session.refreshToken(), refreshProperties.ttl().toSeconds());
+    return ApiResponse.ok(session.accessToken());
   }
 
   @Override
-  public ApiResponse<Void> logout(Jwt jwt) {
-    identityUseCase.logout(jwt.getId(), jwt.getExpiresAt());
+  public ApiResponse<TokenModel> refresh(String refreshToken, HttpServletResponse response) {
+    var session = identityUseCase.refresh(refreshToken);
+    cookies.writeRefreshToken(
+        response, session.refreshToken(), refreshProperties.ttl().toSeconds());
+    return ApiResponse.ok(session.accessToken());
+  }
+
+  @Override
+  public ApiResponse<Void> logout(Jwt jwt, String refreshToken, HttpServletResponse response) {
+    identityUseCase.logout(jwt.getId(), jwt.getExpiresAt(), refreshToken);
+    cookies.clearRefreshToken(response);
+    return ApiResponse.ok(null);
+  }
+
+  @Override
+  public ApiResponse<Void> cookieLogout(
+      Jwt jwt, String refreshToken, HttpServletResponse response) {
+    identityUseCase.logout(
+        Objects.isNull(jwt) ? null : jwt.getId(),
+        Objects.isNull(jwt) ? null : jwt.getExpiresAt(),
+        refreshToken);
+    cookies.clearRefreshToken(response);
     return ApiResponse.ok(null);
   }
 

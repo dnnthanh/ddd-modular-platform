@@ -3,6 +3,8 @@ package dev.demo.identity.application.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.demo.core.cache.CacheDefinition;
+import dev.demo.core.cache.CacheHelper;
 import dev.demo.core.exception.type.BadRequestException;
 import dev.demo.core.exception.type.ForbiddenException;
 import dev.demo.core.security.UserContext;
@@ -20,13 +22,18 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 
 class IdentityApplicationServiceTest {
   private final UserAccountPort users = mock(UserAccountPort.class);
   private final RolePort roles = mock(RolePort.class);
+  private final RefreshTokenApplicationService refreshTokens =
+      mock(RefreshTokenApplicationService.class);
+  private final CacheHelper cacheHelper = new CacheHelper(mock(CacheManager.class));
+  private final CacheDefinition<Boolean> revokedJwtCache =
+      new CacheDefinition<>("auth:revoked-jwt", Boolean.class, Duration.ofMinutes(16));
   private final IdentityApplicationService service =
       new IdentityApplicationService(
           users,
@@ -35,8 +42,10 @@ class IdentityApplicationServiceTest {
           new UserContext(UUID.randomUUID(), Set.of("ROLE_ADMIN")),
           new BCryptPasswordEncoder(4),
           mock(JwtEncoder.class),
-          mock(StringRedisTemplate.class),
-          new JwtProperties(null, null, "test", Duration.ofMinutes(15)));
+          new JwtProperties(null, null, "test", Duration.ofMinutes(15)),
+          cacheHelper,
+          revokedJwtCache,
+          refreshTokens);
 
   private void allowReader() {
     when(roles.existingCodes(List.of("READER"))).thenReturn(Set.of("READER"));
@@ -87,8 +96,10 @@ class IdentityApplicationServiceTest {
             new UserContext(UUID.randomUUID(), Set.of("USERS_MANAGE", "CATALOG_READ")),
             new BCryptPasswordEncoder(4),
             mock(JwtEncoder.class),
-            mock(StringRedisTemplate.class),
-            new JwtProperties(null, null, "test", Duration.ofMinutes(15)));
+            new JwtProperties(null, null, "test", Duration.ofMinutes(15)),
+            cacheHelper,
+            revokedJwtCache,
+            refreshTokens);
     assertThrows(
         ForbiddenException.class,
         () -> manager.updateRoles(new ChangeUserRolesCommand(target, List.of("READER"))));

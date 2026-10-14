@@ -17,8 +17,23 @@ backup_once() (
   tmp="$BACKUP_DIR/.$name.$$.partial"
   check="$tmp.sha256"
   marker="$BACKUP_DIR/.last-success.$$.partial"
+  outbox="$BACKUP_DIR/outbox"
+  mkdir -p "$outbox"
+  chmod 700 "$outbox"
   published=0
-  trap 'rm -f "$tmp" "$check" "$marker"; if [ "$published" = 0 ]; then rm -f "$final" "$final.sha256"; fi' EXIT HUP INT TERM
+  completed=0
+  write_event() {
+    status=$1
+    event="$outbox/$(date -u +%Y%m%dT%H%M%SZ)-$$-$status.json"
+    event_tmp="$event.partial"
+    # name is generated locally and contains no user input or error output.
+    printf '{"id":"%s","status":"%s","filename":"%s"}\n' "${event##*/}" "$status" "$name" > "$event_tmp"
+    chmod 600 "$event_tmp"
+    mv "$event_tmp" "$event"
+  }
+  # A fresh `sh backup.sh once` runs this trap for every unhandled command
+  # failure, including a failed validation, publish, or cleanup operation.
+  trap 'rc=$?; rm -f "$tmp" "$check" "$marker"; if [ "$published" = 0 ]; then rm -f "$final" "$final.sha256"; fi; if [ "$completed" = 0 ]; then write_event failure || :; fi; exit "$rc"' EXIT HUP INT TERM
   pg_dump --format=custom --no-owner --no-acl --file="$tmp" || exit 1
   pg_restore --list "$tmp" >/dev/null || exit 1
   hash=$(sha256sum "$tmp" | cut -d ' ' -f 1)
@@ -27,9 +42,12 @@ backup_once() (
   mv "$check" "$final.sha256"
   (cd "$BACKUP_DIR" && sha256sum -c "$name.sha256" >/dev/null)
   printf '%s\n' "$name" > "$marker"
+  chmod 600 "$marker"
   mv "$marker" "$BACKUP_DIR/.last-success"
   published=1
   find "$BACKUP_DIR" -maxdepth 1 -type f -name 'modulardb-*.dump*' -mmin "+$((BACKUP_RETENTION_DAYS * 1440))" -exec rm -f {} \;
+  write_event success
+  completed=1
   printf '%s Backup completed: %s\n' "$(date -u +%FT%TZ)" "$name"
 )
 if [ "${1:-schedule}" = once ]; then backup_once; exit; fi

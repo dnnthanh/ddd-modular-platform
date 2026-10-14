@@ -1,6 +1,12 @@
 package dev.demo.gateway;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
@@ -9,6 +15,7 @@ import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(GatewayRateLimitProperties.class)
@@ -21,13 +28,32 @@ public class GatewayRoutes {
   }
 
   @Bean
-  KeyResolver principalKeyResolver() {
-    // Rate-limit by validated identity, not by untrusted request headers.
+  KeyResolver principalKeyResolver(
+      @Value("${app.gateway.trusted-proxy-host:nginx}") String trustedHost) {
     return exchange ->
         exchange
             .getPrincipal()
-            .map(principal -> principal.getName())
-            .switchIfEmpty(Mono.just("anonymous"));
+            .map(principal -> "user:" + principal.getName())
+            .switchIfEmpty(
+                Mono.fromCallable(
+                        () -> {
+                          Set<String> trusted;
+                          try {
+                            // Resolve only the configured proxy host, never a user-supplied
+                            // hostname.
+                            trusted =
+                                Arrays.stream(InetAddress.getAllByName(trustedHost))
+                                    .map(InetAddress::getHostAddress)
+                                    .collect(Collectors.toSet());
+                          } catch (UnknownHostException exception) {
+                            trusted = Set.of();
+                          }
+                          return AnonymousRateLimitKey.key(
+                              exchange.getRequest().getRemoteAddress(),
+                              exchange.getRequest().getHeaders().getFirst("X-Real-IP"),
+                              trusted);
+                        })
+                    .subscribeOn(Schedulers.boundedElastic()));
   }
 
   @Bean
