@@ -212,6 +212,10 @@ do_up(){
   "$ROOT/scripts/migrate-revoked-tokens.sh"
   write_replicas "$n"
   change up "source-build replicas=$n revision=$GIT_REVISION" compose up -d --no-build --scale "modular-app=$n"
+  if [[ "$(uname -s)" == Darwin ]]; then
+    "$ROOT/scripts/watchdog.sh" start
+    compose up -d --no-build ops-observer
+  fi
 }
 do_scale(){
   local n="${1:?usage: scale N}"

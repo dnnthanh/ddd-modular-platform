@@ -193,7 +193,8 @@ Xem [Compose startup order](https://docs.docker.com/compose/how-tos/startup-orde
 | `docker compose stop` / down | Dừng chủ động; cần start/up khi muốn chạy lại |
 | Watchdog tùy chọn restart | Script dùng Docker restart chủ động, không được hiểu như counter auto restart |
 
-**Watchdog không được Compose bật mặc định.** `scripts/health-watchdog.py` là tool
+**Watchdog hiện đã bật trên máy local bằng LaunchAgent.** Deploy trên macOS
+khởi động/cập nhật LaunchAgent; trên VPS Linux cần installer systemd riêng. `scripts/health-watchdog.py` là tool
 host-side riêng: poll mặc định 10 giây, unhealthy liên tục 30 giây mới restart,
 cooldown 90 giây; chỉ can thiệp `modular-app`, `gateway`, `eureka`, không restart DB.
 Trên Linux/VPS, khi chủ động muốn bật, xem `scripts/install-watchdog.sh` và
@@ -204,8 +205,9 @@ Không chạy watchdog trực tiếp từ checkout mà CI/user khác có thể s
 
 Compose không phải Kubernetes controller: không tự tạo replica thay thế đã bị xóa,
 không tự autoscale và không đưa service sang host khác. `Auto restarts=0` cũng không
-chứng minh chưa từng có thao tác restart/redeploy. Hiện không có bộ đếm lịch sử
-restart thủ công vĩnh viễn; thời điểm start và container ID là dữ liệu để đối chiếu.
+chứng minh chưa từng có thao tác restart/redeploy. Watchdog restarts lưu riêng bền vững qua recreate; không tính thao tác
+stop/start thủ công hoặc auto restart của Docker. Không có một bộ đếm cộng tất cả
+nguồn restart. Thời điểm start và container ID là dữ liệu để đối chiếu.
 
 ## 4. Lệnh kiểm tra thực tế
 
@@ -300,3 +302,70 @@ sao lưu ngoài host và kiểm tra restore riêng.
   Redis và các app tiếp tục chạy. Đây là bằng chứng cho restart policy khi process
   thoát, không phải bằng chứng tự restart một process còn sống nhưng unhealthy.
 - Đây là snapshot kiểm tra; counter có thể reset khi recreate container.
+
+## 8. Watchdog trong bảng và lệnh tương tự kiểm tra Kubernetes
+
+Hai bảng Operations/Observability có thêm:
+
+| Cột / panel | Ý nghĩa |
+|---|---|
+| Watchdog restarts | Số lệnh restart watchdog thực hiện thành công, lưu theo service qua recreate |
+| Watchdog gần nhất | Thời điểm watchdog thử restart, kể cả lệnh thất bại |
+| Kết quả phục hồi | Chưa thử / đang chờ health / đã phục hồi / restart lỗi / quá hạn / đã dừng / container bị xóa |
+| Host watchdog | Active: heartbeat <90 giây; offline: không thấy daemon hoạt động. Không suy luận từ số restart cũ rằng daemon đang chạy |
+
+Counter tăng khi Docker chấp nhận lệnh restart, **kết quả phục hồi** mới xác nhận
+health đã trở lại. Watchdog đợi tối đa 180 giây sau lần thử; failure/timeout không
+được gắn nhãn thành công. Cooldown theo service 90 giây vẫn áp dụng khi daemon
+chạy lại. Log JSON chứa service, container ID, timestamp và kết quả; không lưu
+Docker environment/password. State/counter không được xóa như file rác.
+
+Điều kiện: Running=true, không paused/restarting, health=`unhealthy` liên tục
+30 giây quan sát được. `starting` có grace của Docker healthcheck (Java hiện 80s),
+không bị restart chỉ vì chưa healthy sau 30 giây. Process đã thoát do restart policy
+của Docker xử lý; stop chủ động giữ dừng. Không restart PostgreSQL/Redis. Khi host
+watchdog restart, cửa sổ unhealthy liên tục được đo lại để tránh restart dựa trên
+snapshot cũ. Việc stop ngay sau lần kiểm tra trước restart vẫn là race của thao tác
+Docker; muốn bảo trì hãy dừng watchdog trước, rồi stop service.
+
+macOS (đã bật cho local):
+
+```bash
+./scripts/watchdog.sh status
+./scripts/watchdog.sh history 30
+./scripts/watchdog.sh stop   # bảo trì chủ động
+./scripts/watchdog.sh start  # bật lại và cập nhật bản runtime
+```
+
+LaunchAgent chạy theo user, bản runtime/state nằm ở
+`~/Library/Application Support/ddd-platform/watchdog/`; tránh macOS chặn Downloads.
+`WATCHDOG_STATE_DIR` trong `.env` chỉ đường dẫn state để observer mount read-only.
+LaunchAgent khởi động theo phiên đăng nhập, không phải daemon hệ thống trước login.
+Watchdog và observer dùng hai process riêng: observer không được quyền restart Docker.
+
+Linux/VPS:
+
+```bash
+sudo ./scripts/install-watchdog.sh
+# Đặt WATCHDOG_STATE_DIR=/var/lib/ddd-platform-watchdog trong .env.
+docker compose up -d --no-build ops-observer
+sudo systemctl status ddd-watchdog
+sudo journalctl -u ddd-watchdog --since '15 minutes ago'
+sudo tail -n 30 /var/lib/ddd-platform-watchdog/events.jsonl
+sudo cat /var/lib/ddd-platform-watchdog/state.json
+```
+
+State systemd được giữ trong `/var/lib/ddd-platform-watchdog`, runtime riêng
+root-owned trong `/usr/local/libexec/ddd-platform`; không cấp root cho code checkout.
+Không dùng câu lệnh `kubectl` vì project chưa deploy Kubernetes. Lệnh tương ứng:
+`compose ps -a` để xem container, `docker inspect` để đọc health/exit/StartedAt,
+`compose logs` để xem exception, history watchdog để biết ai thử phục hồi và kết quả.
+Không có distributed trace nghiệp vụ cho thao tác restart host; lịch sử watchdog
+là event vận hành, không đưa vào Loki chỉ dành cho log Java. Khi crash giữa việc
+Docker restart và ghi counter có thể thiếu một lần; đây không phải audit exactly-once.
+
+Kiểm chứng watchdog local: tạo lỗi probe healthcheck có kiểm soát trên một
+replica app, watchdog thực hiện restart, probe được khôi phục, app healthy lại.
+Counter watchdog app tăng 0 → 1 và kết quả là recovered; hai replica khác
+không bị restart. Đây là thử luồng remediation, không khẳng định mọi lỗi
+nghiệp vụ sẽ được restart giải quyết.

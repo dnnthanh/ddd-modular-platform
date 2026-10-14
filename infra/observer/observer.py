@@ -23,6 +23,7 @@ PROJECT = os.environ.get("DDD_PROJECT", "ddd-platform")
 PERIOD = max(5, int(os.environ.get("POLL_SECONDS", "10")))
 EVENT_LOG = Path("/state/history/events.jsonl")
 STATE_FILE = Path("/state/state.env")
+WATCHDOG_STATE = Path("/watchdog/state.json")
 lock = threading.Lock()
 last_metrics = 'ddd_observer_scrape_success 0\n'
 last_states = {}
@@ -266,6 +267,11 @@ def refresh():
     last_states = current_states
 
     services = {'modular-app', 'gateway', 'eureka', 'nginx', 'postgres', 'redis'} | set(stats)
+    try:
+        watchdog = json.loads(WATCHDOG_STATE.read_text())
+    except (OSError, ValueError):
+        watchdog = {}
+    lines.append(metric('ddd_watchdog_up', int(time.time() - watchdog.get('heartbeat', 0) < 90)))
     desired = desired_replicas()
     for service in sorted(services):
         lines.extend([
@@ -276,6 +282,11 @@ def refresh():
             metric('ddd_service_restart_count', stats[service]['restarts'], {'service': service}),
             metric('ddd_service_replicas_desired', desired if service == 'modular-app' else 1, {'service': service}),
         ])
+    for service in sorted(services):
+        entry = watchdog.get('services', {}).get(service, {})
+        for suffix, key in [('restarts', 'restarts'), ('attempts', 'attempts'),
+                            ('last_attempt_seconds', 'last_attempt_at'), ('result', 'result')]:
+            lines.append(metric('ddd_watchdog_' + suffix, entry.get(key, 0), {'service': service}))
     with lock:
         last_metrics = ''.join(lines)
     export_otlp_metrics(lines)

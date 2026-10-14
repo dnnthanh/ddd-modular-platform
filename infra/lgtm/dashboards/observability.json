@@ -425,6 +425,36 @@
           },
           "instant": true,
           "format": "table"
+        },
+        {
+          "refId": "G",
+          "expr": "max by(service)(ddd_watchdog_restarts)",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "H",
+          "expr": "1000 * max by(service)(ddd_watchdog_last_attempt_seconds)",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "I",
+          "expr": "max by(service)(ddd_watchdog_result)",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "options": {
@@ -432,7 +462,8 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
-        }
+        },
+        "enableHeaderWrap": true
       },
       "fieldConfig": {
         "defaults": {
@@ -510,10 +541,87 @@
                 "value": 210
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Watchdog gần nhất"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Chưa thử"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kết quả phục hồi"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Chưa thử",
+                        "color": "blue"
+                      },
+                      "1": {
+                        "text": "Đã phục hồi",
+                        "color": "green"
+                      },
+                      "2": {
+                        "text": "Restart lỗi",
+                        "color": "red"
+                      },
+                      "3": {
+                        "text": "Quá hạn phục hồi",
+                        "color": "red"
+                      },
+                      "4": {
+                        "text": "Đang chờ health",
+                        "color": "orange"
+                      },
+                      "5": {
+                        "text": "Đã dừng",
+                        "color": "blue"
+                      },
+                      "6": {
+                        "text": "Container đã xóa",
+                        "color": "blue"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
           }
         ]
       },
-      "description": "Health status: healthy = all running replicas pass healthcheck; no healthcheck = containers are running but readiness is not verified; pending/unhealthy = at least one check is not healthy. Compare running with desired replicas. Auto restarts uses Docker RestartCount: manual restarts and container recreation are excluded. Last started shows the latest start among service replicas.",
+      "description": "Health status: healthy = all running replicas pass healthcheck; no healthcheck = containers are running but readiness is not verified; pending/unhealthy = at least one check is not healthy. Compare running with desired replicas. Auto restarts uses Docker RestartCount: manual restarts and container recreation are excluded. Last started shows the latest start among service replicas. Watchdog restarts persists successful restart commands across recreation; recovery result separately confirms readiness. Requires host watchdog heartbeat.",
       "transformations": [
         {
           "id": "joinByField",
@@ -531,7 +639,10 @@
               "Time 2": true,
               "Time 3": true,
               "Time 4": true,
-              "Time 5": true
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Time 8": true
             },
             "indexByName": {
               "service": 0,
@@ -540,7 +651,10 @@
               "Value #B": 3,
               "Value #C": 4,
               "Value #D": 5,
-              "Value #F": 6
+              "Value #F": 6,
+              "Value #G": 7,
+              "Value #H": 8,
+              "Value #I": 9
             },
             "renameByName": {
               "service": "Service",
@@ -549,7 +663,10 @@
               "Value #C": "Healthcheck OK",
               "Value #D": "Auto restarts",
               "Value #E": "Trạng thái health",
-              "Value #F": "Khởi động gần nhất"
+              "Value #F": "Khởi động gần nhất",
+              "Value #G": "Watchdog restarts",
+              "Value #H": "Watchdog gần nhất",
+              "Value #I": "Kết quả phục hồi"
             }
           }
         },
@@ -635,6 +752,51 @@
         "prettifyLogMessage": false
       },
       "description": "Aggregated logs from every Java replica. Infrastructure is monitored through metrics."
+    },
+    {
+      "id": 99,
+      "title": "Host watchdog (1=active, 0=offline)",
+      "description": "Heartbeat younger than 90 seconds. Watchdog runs on host and only remediates persistently unhealthy running Java containers.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 24,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ddd_watchdog_up",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Watchdog offline",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Watchdog active",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "options": {
+        "colorMode": "value"
+      }
     }
   ],
   "links": [

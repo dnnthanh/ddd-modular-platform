@@ -89,3 +89,12 @@ HTTP local dùng `AUTH_COOKIE_SECURE=false`; lên VPS HTTPS phải đặt true.
 FE khác origin dùng `credentials: include`, đúng origin được cho phép; SameSite
 Strict phù hợp cùng site, không tự đổi sang None cho mọi trường hợp.
 Không ghi cookie/token vào log và không lưu refresh token gốc vào DB.
+
+## Watchdog
+
+Local macOS đã bật watchdog qua `./scripts/watchdog.sh start`; runtime/state ở
+Library/Application Support, đường dẫn state cấp cho observer bằng `.env`.
+Hai bảng hiện có Watchdog restarts, lần thử và kết quả phục hồi. Chỉ restart
+Java đang chạy nhưng unhealthy liên tục 30 giây; không bật lại container stop
+chủ động. VPS Linux dùng installer systemd. Xem lệnh và giới hạn trong
+[monitoring-guide.md](monitoring-guide.md#8-watchdog-trong-bảng-và-lệnh-tương-tự-kiểm-tra-kubernetes).

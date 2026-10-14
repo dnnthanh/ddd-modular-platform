@@ -10,7 +10,10 @@ User=root
 Group=root
 WorkingDirectory=/
 ExecStartPre=/usr/bin/python3 -c "import os,stat; paths=['/usr/local/libexec','/usr/local/libexec/ddd-platform','/usr/local/libexec/ddd-platform/health-watchdog.py']; assert all(os.stat(p).st_uid == 0 and not (stat.S_IMODE(os.stat(p).st_mode) & 0o022) for p in paths), 'watchdog paths must be root-owned and not group/world writable'"
-ExecStart=/usr/bin/python3 /usr/local/libexec/ddd-platform/health-watchdog.py 10 30
+ExecStart=/usr/bin/python3 /usr/local/libexec/ddd-platform/health-watchdog.py --state-dir /var/lib/ddd-platform-watchdog
+StateDirectory=ddd-platform-watchdog
+StateDirectoryMode=0755
+ReadWritePaths=/var/lib/ddd-platform-watchdog
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

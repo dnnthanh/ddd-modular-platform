@@ -328,6 +328,7 @@ services:
       - ./infra/observer/observer.py:/app/observer.py:ro
       - ./infra/observer/scrape_metrics.py:/app/scrape_metrics.py:ro
       - ./.deploy:/state:ro
+      - ${WATCHDOG_STATE_DIR:-./.deploy/watchdog}:/watchdog:ro
     depends_on: [docker-socket-proxy, lgtm, postgres-exporter, redis-exporter]
     networks: [docker_api, observability, application]
     healthcheck:
