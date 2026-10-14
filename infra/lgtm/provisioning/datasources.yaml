@@ -1,0 +1,41 @@
+# Disabled: use the LGTM image default datasource definitions.
+# A second set with different UIDs creates duplicate entries in Grafana.
+# Grafana OSS Viewer has datasource query access, not per-service log permissions.
+# apiVersion: 1
+# # These are Grafana datasource entries INSIDE the single docker-otel-lgtm container.
+# # They are not separate Prometheus/Loki/Tempo Docker services.
+# datasources:
+#   - name: DDD Prometheus
+#     uid: ddd-prometheus
+#     type: prometheus
+#     access: proxy
+#     url: http://localhost:9090
+#     editable: false
+#   - name: DDD Loki
+#     uid: ddd-loki
+#     type: loki
+#     access: proxy
+#     url: http://localhost:3100
+#     editable: false
+#     jsonData:
+#       derivedFields:
+#         - name: TraceID
+#           matcherRegex: '"trace_id"\s*:\s*"([a-fA-F0-9]{32})"'
+#           datasourceUid: ddd-tempo
+#           url: '${__value.raw}'
+#           urlDisplayLabel: Open trace in Tempo
+#           internalLink: true
+#   - name: DDD Tempo
+#     uid: ddd-tempo
+#     type: tempo
+#     access: proxy
+#     url: http://localhost:3200
+#     editable: false
+#     jsonData:
+#       tracesToLogsV2:
+#         datasourceUid: ddd-loki
+#         filterByTraceID: true
+#         filterBySpanID: false
+#         tags:
+#           - key: service.name
+#             value: service

@@ -1,0 +1,16 @@
+[Unit]
+Description=DDD Platform health watchdog (host-side Docker Compose)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+# Replace /opt/ddd-modular-platform with the absolute deployment directory.
+WorkingDirectory=/opt/ddd-modular-platform
+ExecStart=/usr/bin/python3 /opt/ddd-modular-platform/scripts/health-watchdog.py 10 30
+Restart=always
+RestartSec=5
+# Docker group/root access is privileged: secure this host and restrict group membership.
+
+[Install]
+WantedBy=multi-user.target

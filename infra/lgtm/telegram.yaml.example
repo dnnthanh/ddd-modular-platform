@@ -1,0 +1,21 @@
+# OPTIONAL: Copy into infra/lgtm/provisioning/alerting/telegram.yaml
+# Only AFTER setting TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env.
+# Contact point is created by Grafana provisioning; test delivery in Grafana UI.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: ddd-telegram
+    receivers:
+      - uid: ddd-telegram
+        type: telegram
+        disableResolveMessage: false
+        settings:
+          bottoken: $TELEGRAM_BOT_TOKEN
+          chatid: $TELEGRAM_CHAT_ID
+policies:
+  - orgId: 1
+    receiver: ddd-telegram
+    group_by: ['grafana_folder', 'alertname']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

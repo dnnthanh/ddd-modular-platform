@@ -1,0 +1,48 @@
+server:
+  port: 8080
+  shutdown: graceful
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 3000
+            response-timeout: 30s
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    register-with-eureka: false
+    fetch-registry: true
+app:
+  security:
+    jwt:
+      public-key: ${JWT_PUBLIC_KEY:file:./secrets/jwt/public.pem}
+      issuer: ${JWT_ISSUER:ddd-platform-dev}
+  gateway:
+    rate-limit:
+      replenish-rate: ${GATEWAY_RATE_LIMIT_REPLENISH:20}
+      burst-capacity: ${GATEWAY_RATE_LIMIT_BURST:40}
+      requested-tokens: ${GATEWAY_RATE_LIMIT_TOKENS:1}
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

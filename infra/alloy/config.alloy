@@ -1,0 +1,60 @@
+// Default LGTM Loki datasource. Only collect logs from project Java executables.
+// Redis/PostgreSQL/Nginx/Alloy/observer/LGTM are monitored through metrics, not logs.
+// This is an ingestion allowlist, not Grafana role-based authorization.
+discovery.docker "containers" {
+  host = "http://docker-socket-proxy:2375"
+  filter {
+    name = "label"
+    values = ["com.docker.compose.project=ddd-platform"]
+  }
+}
+
+discovery.relabel "java" {
+  targets = discovery.docker.containers.targets
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex = "gateway|modular-app|eureka"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex = "gateway"
+    replacement = "api-gateway"
+    target_label = "service_name"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex = "modular-app"
+    replacement = "modular-app"
+    target_label = "service_name"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex = "eureka"
+    replacement = "eureka-server"
+    target_label = "service_name"
+  }
+}
+
+// Previous collection of every container is intentionally disabled:
+// targets = discovery.docker.containers.targets
+// Infrastructure log collection must not be enabled without reviewing access control.
+loki.source.docker "java" {
+  host = "http://docker-socket-proxy:2375"
+  targets = discovery.relabel.java.output
+  forward_to = [loki.process.java.receiver]
+}
+
+loki.process "java" {
+  // Loki indexes only service_name; instance/container metadata remains in metrics.
+  stage.label_keep {
+    values = ["service_name"]
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://lgtm:3100/loki/api/v1/push"
+  }
+}

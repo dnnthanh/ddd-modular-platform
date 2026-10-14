@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+.deploy
+**/target
+**/.idea
+**/.DS_Store
+README.md
+
+.idea
+config/code-style
+
+secrets/
