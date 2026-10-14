@@ -11,3 +11,5 @@ README.md
 config/code-style
 
 secrets/
+
+.backups/

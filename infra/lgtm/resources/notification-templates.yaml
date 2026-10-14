@@ -1,0 +1,20 @@
+# Edit this resource file, then reload Grafana alerting provisioning.
+# Telegram uses plain text to avoid markup errors in values and long messages.
+apiVersion: 1
+templates:
+  - orgId: 1
+    name: ddd-vietnamese
+    template: |
+      {{ define "ddd.telegram.vi" -}}
+      {{ if eq .Status "firing" }}🔴 CẢNH BÁO HỆ THỐNG{{ else }}🟢 HỆ THỐNG ĐÃ PHỤC HỒI{{ end }}
+      Đang cảnh báo: {{ len .Alerts.Firing }} | Đã phục hồi: {{ len .Alerts.Resolved }}
+      {{ range .Alerts }}
+      {{ if eq .Status "firing" }}🔴 Đang xảy ra{{ else }}🟢 Đã khắc phục{{ end }}: {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Labels.alertname }}{{ end }}
+      Mức độ: {{ if eq .Labels.severity "critical" }}Nghiêm trọng{{ else if eq .Labels.severity "warning" }}Cảnh báo{{ else }}Thông tin{{ end }}
+      {{ if .Labels.service }}Dịch vụ: {{ .Labels.service }}{{ end }}
+      {{ if .Annotations.description }}Chi tiết: {{ .Annotations.description }}{{ end }}
+      Bắt đầu: {{ .StartsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05" }} (giờ Việt Nam)
+      {{ if eq .Status "resolved" }}Phục hồi: {{ .EndsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05" }} (giờ Việt Nam){{ end }}
+      {{ end }}
+      Xem Grafana: {{ .ExternalURL }}
+      {{- end }}

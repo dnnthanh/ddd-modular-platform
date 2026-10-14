@@ -13,6 +13,7 @@ HISTORY_DIR="$STATE_DIR/history"
 help() { cat <<'USAGE'
 DDD Modular Monolith — source-based deployment (Docker Compose)
   ./scripts/deploy.sh init                 prepare .env only (NOT RSA keys)
+  ./scripts/deploy.sh alerts               reload notification resources without Java build
   ./scripts/deploy.sh up [N]                 build CURRENT SOURCE and start N app instances
   ./scripts/deploy.sh scale N                change replica count (no source rebuild)
   ./scripts/deploy.sh restart app|gateway|eureka|all
@@ -26,7 +27,7 @@ USAGE
 err(){ echo "ERROR: $*" >&2; exit 1; }
 need(){ command -v "$1" >/dev/null || err "missing command: $1"; }
 valid_num(){ [[ "$1" =~ ^[1-9][0-9]*$ ]] && (( 10#$1 <= 50 )) || err 'replica count must be 1..50'; }
-setup_dirs(){ mkdir -p "$HISTORY_DIR"; chmod 700 "$STATE_DIR" "$HISTORY_DIR"; }
+setup_dirs(){ mkdir -p "$HISTORY_DIR" "$ROOT/.backups/postgres"; chmod 700 "$STATE_DIR" "$HISTORY_DIR" "$ROOT/.backups/postgres"; }
 
 init(){
   need python3
@@ -50,7 +51,7 @@ for i,line in enumerate(lines):
   for name,secret in keys.items():
     if line.startswith(name+'='):
       found.add(name)
-      if line.partition('=')[2] in ('', 'CHANGE_ME'):
+      if line.partition('=')[2] in ('', 'CHANGE_ME', 'example-change-me-2026'):
         lines[i]=name+'='+secret
 for name,secret in keys.items():
   if name not in found: lines.append(name+'='+secret)
@@ -65,8 +66,11 @@ path, uid, gid = sys.argv[1:]
 with open(path, encoding='utf-8') as f:
     lines = f.read().splitlines()
 for name, value in [('APP_UID', uid), ('APP_GID', gid)]:
-    if not any(line.startswith(name + '=') for line in lines):
+    matches = [i for i, line in enumerate(lines) if line.startswith(name + '=')]
+    if not matches:
         lines.append(name + '=' + value)
+    elif not lines[matches[-1]].partition('=')[2].strip():
+        lines[matches[-1]] = name + '=' + value
 with open(path, 'w', encoding='utf-8') as f:
     f.write('\n'.join(lines) + '\n')
 PYUID
@@ -152,6 +156,9 @@ import shutil
 import sys
 
 env_file, template, target = (pathlib.Path(item) for item in sys.argv[1:])
+# Resource is authoritative; generated provisioning file stays out of Git.
+shutil.copyfile(template.parent / "resources/notification-templates.yaml",
+                target.parent / "notification-templates.yaml")
 values = {}
 for line in env_file.read_text(encoding="utf-8").splitlines():
     if "=" in line and not line.lstrip().startswith("#"):
@@ -217,6 +224,7 @@ main(){
   load
   case "$cmd" in
     up) do_up "$@";;
+    alerts) configure_telegram; compose up -d --no-deps --force-recreate lgtm;;
     scale) do_scale "$@";;
     restart) do_restart "$@";;
     down) change down 'keep volumes' compose down;;

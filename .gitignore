@@ -22,3 +22,8 @@ infra/lgtm/provisioning/alerting/telegram.yaml
 **/__pycache__/
 *.pyc
 *.log
+
+.backups/
+
+# Generated from the notification template resource
+infra/lgtm/provisioning/alerting/notification-templates.yaml

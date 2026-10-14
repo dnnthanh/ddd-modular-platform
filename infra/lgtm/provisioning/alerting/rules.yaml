@@ -1,9 +1,7 @@
-# Provisioned Grafana alert rules, contact point optional.
 apiVersion: 1
 groups:
 - orgId: 1
   name: ddd-runtime-alerts
-  # Share the dashboard folder; the old lower-case title created an empty-looking duplicate.
   folder: DDD Platform
   interval: 1m
   rules:
@@ -13,9 +11,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: No modular-app container is running.
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Toàn bộ replica ứng dụng đã dừng
+      description: Kiểm tra container modular-app và kết nối PostgreSQL/Redis.
     labels:
       severity: critical
       component: ddd-platform
@@ -73,9 +70,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: 'CRITICAL: Gateway stopped'
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: API Gateway đã dừng
+      description: Kiểm tra container gateway và cấu hình khởi động.
     labels:
       severity: critical
       component: ddd-platform
@@ -133,9 +129,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: Postgres exporter cannot connect to PostgreSQL.
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: PostgreSQL không khả dụng
+      description: Kiểm tra sức khỏe PostgreSQL và kết nối exporter.
     labels:
       severity: critical
       component: ddd-platform
@@ -193,9 +188,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: Redis exporter cannot connect to Redis.
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Redis không khả dụng
+      description: Kiểm tra sức khỏe Redis và kết nối exporter.
     labels:
       severity: critical
       component: ddd-platform
@@ -253,9 +247,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: Application replicas below desired
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Số replica ứng dụng thấp hơn cấu hình
+      description: Kiểm tra các replica modular-app và số replica mong muốn.
     labels:
       severity: warning
       component: ddd-platform
@@ -313,9 +306,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: JVM heap > 85%
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Bộ nhớ heap JVM vượt 85%
+      description: Kiểm tra tải ứng dụng, GC và cấu hình heap trên dashboard Runtime.
     labels:
       severity: warning
       component: ddd-platform
@@ -329,8 +321,8 @@ groups:
         datasource:
           type: prometheus
           uid: prometheus
-        expr: 100 * sum by (container) (jvm_memory_used_bytes{service="modular-app",area="heap"})
-          / clamp_min(sum by (container) (jvm_memory_max_bytes{service="modular-app",area="heap"}),1)
+        expr: 100 * sum by (container) (jvm_memory_used_bytes{service="modular-app",area="heap"}) / clamp_min(sum by (container)
+          (jvm_memory_max_bytes{service="modular-app",area="heap"}),1)
         instant: true
         refId: A
         intervalMs: 1000
@@ -374,9 +366,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: Hikari active connections > 85%
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Kết nối Hikari đang sử dụng vượt 85%
+      description: Kiểm tra truy vấn chậm và mức sử dụng connection pool.
     labels:
       severity: warning
       component: ddd-platform
@@ -434,9 +425,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: PostgreSQL connections > 40
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Số kết nối PostgreSQL vượt 40
+      description: Kiểm tra connection pool và các kết nối đang hoạt động.
     labels:
       severity: warning
       component: ddd-platform
@@ -494,9 +484,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: Redis configured memory > 85%
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Bộ nhớ Redis vượt 85% giới hạn
+      description: Kiểm tra dung lượng cache và cấu hình giới hạn bộ nhớ Redis.
     labels:
       severity: warning
       component: ddd-platform
@@ -554,9 +543,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: PostgreSQL deadlocks in last 10m
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: PostgreSQL phát sinh deadlock trong 10 phút
+      description: Kiểm tra giao dịch đồng thời và thứ tự khóa dữ liệu.
     labels:
       severity: warning
       component: ddd-platform
@@ -614,9 +602,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: Service CPU spike > 90% of one core
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: CPU dịch vụ vượt 90% một lõi
+      description: Kiểm tra tải và mức dùng CPU trên dashboard Operations.
     labels:
       severity: warning
       component: ddd-platform
@@ -674,9 +661,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: Exporter metrics collection failed
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Không thu thập được metrics dịch vụ
+      description: Kiểm tra exporter, endpoint metrics và kết nối của observer.
     labels:
       severity: warning
       component: ddd-platform
@@ -734,9 +720,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: Docker observer unavailable
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Docker observer không khả dụng
+      description: Kiểm tra ops-observer và Docker socket proxy.
     labels:
       severity: critical
       component: ddd-platform
@@ -794,9 +779,8 @@ groups:
     noDataState: Alerting
     execErrState: Error
     annotations:
-      summary: 'CRITICAL: Nginx entrypoint stopped'
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Nginx đã dừng
+      description: Kiểm tra container nginx và cấu hình reverse proxy.
     labels:
       severity: critical
       component: ddd-platform
@@ -854,9 +838,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: Eureka registry stopped
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Eureka Registry đã dừng
+      description: Kiểm tra container eureka và khả năng đăng ký dịch vụ.
     labels:
       severity: warning
       component: ddd-platform
@@ -914,9 +897,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: Hikari has threads waiting for connections
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: Hikari có luồng chờ kết nối
+      description: Kiểm tra truy vấn chậm hoặc pool đã hết kết nối.
     labels:
       severity: warning
       component: ddd-platform
@@ -974,9 +956,8 @@ groups:
     noDataState: NoData
     execErrState: Error
     annotations:
-      summary: Spring HTTP 5xx exceeds 0.1 requests/sec
-      description: Check Grafana dashboards (Runtime, Infrastructure, Operations)
-        and logs by trace.
+      summary: HTTP 5xx vượt 0,1 yêu cầu/giây
+      description: Kiểm tra log Java theo service_name và lỗi ứng dụng.
     labels:
       severity: warning
       component: ddd-platform
@@ -990,7 +971,8 @@ groups:
         datasource:
           type: prometheus
           uid: prometheus
-        expr: sum by (service) (rate(http_server_requests_seconds_count_total{status=~"5.."}[5m])) or on(service) (0 * sum by (service) (rate(http_server_requests_seconds_count_total[5m])))
+        expr: sum by (service) (rate(http_server_requests_seconds_count_total{status=~"5.."}[5m])) or on(service) (0 * sum
+          by (service) (rate(http_server_requests_seconds_count_total[5m])))
         instant: true
         refId: A
         intervalMs: 1000
