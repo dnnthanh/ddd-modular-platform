@@ -321,8 +321,8 @@ groups:
         datasource:
           type: prometheus
           uid: prometheus
-        expr: 100 * sum by (container) (jvm_memory_used_bytes{service="modular-app",area="heap"}) / clamp_min(sum by (container)
-          (jvm_memory_max_bytes{service="modular-app",area="heap"}),1)
+        expr: 100 * sum by (container) (jvm_memory_used_bytes{service="modular-app",area="heap"}) / clamp_min(sum
+          by (container) (jvm_memory_max_bytes{service="modular-app",area="heap"}),1)
         instant: true
         refId: A
         intervalMs: 1000
@@ -953,11 +953,14 @@ groups:
   - uid: ddd-http-5xx
     title: Spring HTTP 5xx exceeds 0.1 requests/sec
     condition: C
-    noDataState: NoData
+    noDataState: KeepLast
     execErrState: Error
     annotations:
       summary: HTTP 5xx vượt 0,1 yêu cầu/giây
-      description: Kiểm tra log Java theo service_name và lỗi ứng dụng.
+      description: 'Tốc độ HTTP 5xx của {{ $labels.service }}: {{ printf "%.3f" $values.B.Value }} req/s; ngưỡng
+        >0.1 req/s trên cửa sổ 5 phút, giữ 2 phút. Xem HTTP audit để tìm route/status; metrics không chứa exception.'
+      __dashboardUid__: ddd-jvm-hikari
+      __panelId__: '8'
     labels:
       severity: warning
       component: ddd-platform
@@ -971,8 +974,8 @@ groups:
         datasource:
           type: prometheus
           uid: prometheus
-        expr: sum by (service) (rate(http_server_requests_seconds_count_total{status=~"5.."}[5m])) or on(service) (0 * sum
-          by (service) (rate(http_server_requests_seconds_count_total[5m])))
+        expr: sum by (service) (rate(http_server_requests_seconds_count_total{status=~"5..",uri!~"/actuator.*"}[5m]))
+          or on(service) (0 * sum by (service) (rate(http_server_requests_seconds_count_total[5m])))
         instant: true
         refId: A
         intervalMs: 1000
@@ -1010,3 +1013,71 @@ groups:
             - 0.1
         refId: C
     for: 2m
+  - uid: ddd-java-exception
+    title: Java ERROR exception in logs
+    condition: C
+    noDataState: OK
+    execErrState: Error
+    annotations:
+      summary: 'Java ERROR: {{ $labels.exception_class }}'
+      description: '{{ $values.B.Value }} log ERROR trong 5 phút. Exception và vị trí lấy từ stacktrace; trace ID
+        dùng để tìm trong Tempo. Đọc log đầy đủ ở Observability, không gửi raw payload/exception message nhạy cảm
+        qua Telegram.'
+      __dashboardUid__: ddd-platform-observability
+      __panelId__: '12'
+    labels:
+      severity: warning
+      component: ddd-platform
+      alert_kind: java_exception
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: loki
+      model:
+        datasource:
+          type: loki
+          uid: loki
+        expr: sum by(service,exception_class,location,trace) (count_over_time({service_name=~"api-gateway|modular-app|eureka-server"}
+          | json | level="ERROR" | message !~ "api.exception status=4[0-9]{2}.*" | label_format service="{{.service_name}}",
+          trace="{{.trace_id}}" | trace=~"([a-f0-9]{32})?" | line_format "{{.stack_trace}}" | regexp "^(?P<exception_class>[A-Za-z_$][A-Za-z0-9_.$]*(Exception|Error))"
+          | regexp "at (?P<location>[A-Za-z_$][A-Za-z0-9_.$]+\\([A-Za-z0-9_.$]+:[0-9]+\\))" | label_format exception_class="{{if
+          .exception_class}}{{.exception_class}}{{else}}Unknown{{end}}" | __error__="" [5m]))
+        queryType: instant
+        refId: A
+        maxDataPoints: 1000
+        intervalMs: 1000
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        datasource:
+          type: __expr__
+          uid: __expr__
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+        refId: B
+    - refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        datasource:
+          type: __expr__
+          uid: __expr__
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+        refId: C
+    for: 0s

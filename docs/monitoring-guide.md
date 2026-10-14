@@ -369,3 +369,38 @@ replica app, watchdog thực hiện restart, probe được khôi phục, app he
 Counter watchdog app tăng 0 → 1 và kết quả là recovered; hai replica khác
 không bị restart. Đây là thử luồng remediation, không khẳng định mọi lỗi
 nghiệp vụ sẽ được restart giải quyết.
+
+## 9. Telegram: lỗi 5xx, exception và mất dữ liệu
+
+Rule 5xx: rate 5 phút >0.1 request/giây, giữ liên tục 2 phút. Không gửi chỉ vì
+một request 5xx; không tính route `/actuator.*` vì health có rule riêng.
+Khi query mất dữ liệu, rule giữ trạng thái trước (`KeepLast`); monitoring mất
+metrics được theo dõi bởi rule scrape/observer và trạng thái datasource riêng.
+
+Rule Java ERROR đọc log ba Java service mỗi phút: có log ERROR phù hợp trong
+5 phút thì cảnh báo; loại `api.exception status=4xx` để không coi lỗi client
+là sự cố server. Đây là rule độc lập, một exception ERROR có thể gửi Telegram dù
+chưa đạt ngưỡng rate 5xx. Một trace có nhiều dòng được đếm theo service, exception,
+vị trí và trace ID. Các nhóm alert dùng policy hiện tại (group_wait 30s,
+group_interval 5m, repeat_interval 4h); không gửi một message cho từng dòng log.
+
+Tin có service, exception class, vị trí stacktrace, trace ID nếu có, giá trị
+đánh giá và link panel/rule. Log thiếu trace không được tạo trace ID giả. `Unknown`
+có nghĩa ERROR không có loại exception trong stacktrace. Stacktrace đầy đủ đọc
+qua panel Common Java logs ở Observability; trace ID tra ở Tempo Explore.
+Không gửi raw exception message/body/password/token qua Telegram. Template chỉ
+hiển thị tối đa 5 alert đầu trong nhóm; phần còn lại xem Grafana. Cửa sổ 5 phút
+không còn ERROR là kết thúc cảnh báo quan sát, không chứng minh bug đã được sửa.
+
+`NoData`, `DatasourceError` và `MissingSeries` là vấn đề dữ liệu/evaluation,
+không phải exception nghiệp vụ. Tin thiếu service trong trường hợp này phải báo
+không xác định, không suy đoán tên app. `MissingSeries` có thể kết thúc alert vì
+series bị loại khỏi evaluation chứ không phải vì sửa xong lỗi API.
+
+Đối chiếu tin ngày 14/10/2026: lịch sử Grafana của rule 5xx ghi
+16:37:50 Normal → Pending (NoData), 16:39:50 Pending (NoData) → NoData,
+16:40:50 NoData → Normal (MissingSeries). Query 5xx trong đoạn có sample là 0,
+không thấy HTTP audit 5xx tương ứng. Vì vậy tin này là cảnh báo mất metrics được
+trình bày nhầm như HTTP 5xx, không có exception API để gắn vào. Chưa xác định
+được thành phần gây gap metrics chỉ từ lịch sử này; không gán cho lỗi heartbeat
+Eureka lúc 15:55 (khác thời điểm).

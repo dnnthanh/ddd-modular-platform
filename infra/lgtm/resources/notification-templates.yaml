@@ -1,20 +1,32 @@
-# Edit this resource file, then reload Grafana alerting provisioning.
-# Telegram uses plain text to avoid markup errors in values and long messages.
+# Authoritative Vietnamese notification template; no credentials or raw request payloads.
 apiVersion: 1
 templates:
   - orgId: 1
     name: ddd-vietnamese
     template: |
       {{ define "ddd.telegram.vi" -}}
-      {{ if eq .Status "firing" }}🔴 CẢNH BÁO HỆ THỐNG{{ else }}🟢 HỆ THỐNG ĐÃ PHỤC HỒI{{ end }}
-      Đang cảnh báo: {{ len .Alerts.Firing }} | Đã phục hồi: {{ len .Alerts.Resolved }}
-      {{ range .Alerts }}
-      {{ if eq .Status "firing" }}🔴 Đang xảy ra{{ else }}🟢 Đã khắc phục{{ end }}: {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Labels.alertname }}{{ end }}
-      Mức độ: {{ if eq .Labels.severity "critical" }}Nghiêm trọng{{ else if eq .Labels.severity "warning" }}Cảnh báo{{ else }}Thông tin{{ end }}
-      {{ if .Labels.service }}Dịch vụ: {{ .Labels.service }}{{ end }}
+      {{ if eq .Status "firing" }}🔴 CẢNH BÁO HỆ THỐNG{{ else }}🟢 CẬP NHẬT TRẠNG THÁI{{ end }}
+      Đang cảnh báo: {{ len .Alerts.Firing }} | Đã kết thúc: {{ len .Alerts.Resolved }}
+      {{ range $index, $alert := .Alerts }}{{ if lt $index 5 }}
+      {{ if .Labels.datasource_uid }}Loại: LỖI MONITORING — không xác nhận lỗi API
+      Rule: {{ if .Labels.rulename }}{{ .Labels.rulename }}{{ else }}{{ .Labels.alertname }}{{ end }}
+      Datasource: {{ .Labels.datasource_uid }} | Query: {{ .Labels.ref_id }}
+      {{ else }}{{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Labels.alertname }}{{ end }}{{ end }}
+      Trạng thái: {{ if eq .Status "firing" }}Đang cảnh báo{{ else }}Đã kết thúc{{ end }}
+      Mức độ: {{ if eq .Labels.severity "critical" }}Nghiêm trọng{{ else }}Cảnh báo{{ end }}
+      Service: {{ if .Labels.service }}{{ .Labels.service }}{{ else }}Không xác định từ metrics (không suy đoán){{ end }}
+      {{ if .Labels.container }}Container: {{ .Labels.container }}{{ end }}
+      {{ if .Labels.exception_class }}Exception: {{ .Labels.exception_class }}{{ end }}
+      {{ if .Labels.location }}Tại: {{ .Labels.location }}{{ end }}
+      {{ if .Labels.trace }}Trace ID: {{ .Labels.trace }}{{ end }}
+      {{ if .Annotations.grafana_state_reason }}Lý do trạng thái: {{ .Annotations.grafana_state_reason }}{{ end }}
+      {{ if .Values }}Giá trị đánh giá: {{ range $key, $value := .Values }}{{ $key }}={{ $value }} {{ end }}{{ end }}
       {{ if .Annotations.description }}Chi tiết: {{ .Annotations.description }}{{ end }}
-      Bắt đầu: {{ .StartsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05" }} (giờ Việt Nam)
-      {{ if eq .Status "resolved" }}Phục hồi: {{ .EndsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05" }} (giờ Việt Nam){{ end }}
-      {{ end }}
+      Bắt đầu: {{ .StartsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05" }}
+      {{ if eq .Status "resolved" }}Kết thúc: {{ .EndsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05" }}{{ end }}
+      {{ if .PanelURL }}Biểu đồ: {{ .PanelURL }}{{ else if .DashboardURL }}Dashboard: {{ .DashboardURL }}{{ end }}
+      {{ if .GeneratorURL }}Rule: {{ .GeneratorURL }}{{ end }}
+      {{ end }}{{ end }}
+      {{ if gt (len .Alerts) 5 }}Chỉ hiển thị 5 cảnh báo đầu; xem Grafana để đọc toàn bộ.{{ end }}
       Xem Grafana: {{ .ExternalURL }}
       {{- end }}
