@@ -1,3 +1,5 @@
+> Cách đọc từng dashboard, metrics và xử lý start/die/restart: [Monitoring guide](docs/monitoring-guide.md).
+
 > Mặc định: 1 replica, bật OTEL và monitoring, log Java qua stdout/Loki.
 > Profile `file-logs` dành cho fallback ghi file. Xem [cấu hình hiện tại](docs/observability.md).
 

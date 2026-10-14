@@ -519,8 +519,8 @@
     },
     {
       "id": 11,
-      "title": "JVM metrics scrape success",
-      "type": "stat",
+      "title": "JVM scrape — current status per container",
+      "type": "table",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -528,14 +528,15 @@
       "gridPos": {
         "x": 0,
         "y": 40,
-        "w": 12,
-        "h": 5
+        "w": 24,
+        "h": 9
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "ddd_metrics_scrape_success{service=~\"modular-app|gateway|eureka\"}",
-          "legendFormat": "{{service}} / {{container}}",
+          "expr": "max by(service,container)(ddd_metrics_scrape_success{service=~\"modular-app|gateway|eureka\"} and (timestamp(ddd_metrics_scrape_success{service=~\"modular-app|gateway|eureka\"}) == on(service,container) group_left() max by(service,container)(timestamp(ddd_metrics_scrape_success{service=~\"modular-app|gateway|eureka\"}))))",
+          "instant": true,
+          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -544,29 +545,81 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          },
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 12
+            "filterable": true
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Thu thập metrics"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "OK",
+                        "color": "green"
+                      },
+                      "0": {
+                        "text": "Lỗi scrape",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "One row per Java container, newest sample across instance IDs. 1 means Actuator metrics were collected, 0 means scrape failed. This is telemetry status, not application readiness.",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "service": 0,
+              "container": 1,
+              "Value": 2
+            },
+            "renameByName": {
+              "service": "Service",
+              "container": "Container",
+              "Value": "Thu thập metrics"
+            }
+          }
         },
-        "orientation": "auto",
-        "colorMode": "value",
-        "textMode": "auto"
-      }
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Container",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": 12,
@@ -577,10 +630,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 12,
-        "y": 40,
-        "w": 12,
-        "h": 5
+        "x": 0,
+        "y": 49,
+        "w": 24,
+        "h": 6
       },
       "targets": [
         {

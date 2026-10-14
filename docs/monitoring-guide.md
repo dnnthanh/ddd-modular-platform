@@ -1,0 +1,302 @@
+# Hướng dẫn đọc monitoring và xử lý sự cố
+
+Tài liệu này mô tả cấu hình của project: Docker Compose, 3 replica `modular-app`,
+Grafana/Loki/Tempo/Prometheus, Java OTel agent, Alloy và ops-observer.
+Đây là container Compose, **không phải pod Kubernetes**.
+
+## 1. Đọc nhanh khi nghi service bị lỗi
+
+1. Mở **Operations**, chọn service và xem `Đang chạy / Mong muốn`.
+2. Xem `Trạng thái health`: process chạy chưa có nghĩa API/DB đã sẵn sàng.
+3. Xem `Auto restarts` và `Khởi động gần nhất`.
+4. Mở **Runtime** để xem heap, CPU, Hikari, HTTP 5xx và trạng thái scrape.
+5. Mở **Observability** hoặc Loki Explore để đọc exception đúng thời điểm.
+6. Nếu metrics/log trống, kiểm tra observer, Alloy và LGTM trước khi kết luận app chết.
+
+Chọn `Last 15 minutes` để điều tra hiện tại, `Last 1 hour` hoặc rộng hơn để xem
+lịch sử. Dữ liệu thường trễ một vài chu kỳ polling/scrape (observer mặc định 15 giây,
+cộng thời gian đọc Docker và Actuator). Khoảng trống khi restart là bình thường.
+Nút Refresh lấy dữ liệu mới; sau khi thay file dashboard cần **F5 tải lại trang**.
+
+### Trạng thái cần phân biệt
+
+| Tín hiệu | Nghĩa | Việc kiểm tra tiếp |
+|---|---|---|
+| Running = Desired, Healthy | Đủ process và mọi replica chạy đều qua healthcheck | Vẫn kiểm tra request thực tế nếu người dùng báo lỗi |
+| Running < Desired | Thiếu replica so với cấu hình | `docker compose ps -a`, startup logs, exit code, Eureka |
+| Healthy nhưng Running < Desired | Các replica còn chạy tốt, nhưng hệ thống vẫn thiếu replica | Không chỉ nhìn màu xanh; so sánh hai cột replica |
+| Chưa có healthcheck | Process chạy, Compose chưa có phép thử readiness cho service | Không hiểu số Healthy=0 thành service chết |
+| Chờ / lỗi healthcheck | Có replica đang starting/unhealthy hoặc trạng thái hỗn hợp | Xem healthcheck output và logs |
+| Đã dừng | Không có replica chạy trong snapshot | Phân biệt stop chủ động và process tự thoát |
+| Scrape OK | Observer đọc được endpoint metrics | Không đồng nghĩa tất cả nghiệp vụ hoạt động tốt |
+| Lỗi scrape | Endpoint metrics không truy cập/đọc được | App startup, mạng, Actuator, observer |
+| No data | Không có series/event phù hợp trong khoảng thời gian/bộ lọc | Kiểm tra time range, selector và pipeline; không mặc định đổi thành 0 |
+
+Bảng service dùng snapshot hiện tại theo service. Biểu đồ theo thời gian giữ lịch
+sử container cũ; nhiều instance ID trong legend có thể là các lần recreate.
+
+## 2. Các màn hình dùng để làm gì?
+
+| Dashboard | Mục đích chính |
+|---|---|
+| Operations — Replicas, Builds, Images & Logs | Trạng thái container, replica, image đang chạy, startup và auto restart |
+| Observability — Services & Logs | Sức khỏe pipeline monitoring và log Java/API audit |
+| Runtime — JVM, GC, Hikari & HTTP | Tài nguyên JVM, pool kết nối và HTTP của các replica |
+| Infrastructure — PostgreSQL, Hikari & Redis | DB/Redis và pool PostgreSQL bên trong app |
+| JVM Overview (OpenTelemetry) | Metrics JVM/HTTP từ Java agent và log Java chung |
+| RED Metrics (classic histogram) | Lưu lượng, lỗi, latency từ histogram dạng bucket |
+| RED Metrics (native histogram) | RED từ native histogram; có thể trống nếu không có kiểu metric này |
+
+### Operations: từng vùng và biểu đồ
+
+| Vùng | Cách đọc |
+|---|---|
+| Selected services — replicas, health & startup | Một dòng/service. Bộ lọc Docker service áp dụng vào bảng. App mặc định hiện tại mong muốn 3, service hạ tầng thường 1 |
+| Đang chạy / Mong muốn | So sánh actual và desired; app `2 / 3` là thiếu một replica dù hai replica còn lại healthy |
+| Healthcheck OK | Số replica đang chạy có healthcheck healthy; không phải số request thành công |
+| Auto restarts | Tổng Docker RestartCount của các container hiện tại trong service; không phải lịch sử restart vĩnh viễn |
+| Khởi động gần nhất | Lần start mới nhất trong các replica service; muốn xem riêng từng replica dùng Docker inspect |
+| Image drift | 0: image ID đang chạy khớp image mà tag hiện tại trỏ tới; >0: có container lệch. Không kết luận code đã deploy chỉ từ tên tag `local` |
+| Observer Docker API status | 1: observer đọc Docker thành công; 0: snapshot có thể thiếu/stale, phải kiểm tra observer/proxy |
+| Running gateway instances | Số gateway đang chạy; cấu hình hiện tại là 1 |
+| Desired / running / healthy | Lịch sử số replica; nhìn thời điểm scale, startup chậm hoặc replica rơi xuống |
+| Docker auto restarts per selected container | RestartCount theo container. Container mới tạo lại bắt đầu bộ đếm mới; dùng cả container ID và thời điểm start |
+| Running image evidence | Image SHA, revision, tag và container ID. Chỉ hiện metadata được chọn, không xuất environment chứa password |
+| Container health, current state and restart counts | Metadata từng container; health/state giúp tìm replica cụ thể. Cột số là Docker RestartCount |
+| Container created at / new IDs | Thời điểm tạo container, khác thời điểm start. Recreate đổi ID; restart cùng container thường giữ ID |
+| Live application logs | Log Java trong thời gian đã chọn. Khi có trace ID, sao chép vào Tempo Explore để tìm trace liên quan |
+
+Image drift và replica count là trạng thái vận hành, không chứng minh API nghiệp vụ
+đúng. Sau deploy vẫn nên thực hiện một request phù hợp.
+
+### Observability: từng panel
+
+| Panel | Cách đọc |
+|---|---|
+| LGTM container running | LGTM có process chạy; kết hợp health Docker và Grafana API để kiểm tra readiness |
+| Docker API observer health | 1 là lần đọc Docker thành công, 0 là lỗi thu thập |
+| App instances healthy | Hiện tại kỳ vọng 3 khi cả ba app qua healthcheck |
+| PostgreSQL / Redis connection | `pg_up` / `redis_up`: 1 kết nối được backend, 0 không kết nối được |
+| Service overview | Cùng cách đọc bảng Operations, nhưng không có bộ lọc service |
+| Gateway structured JSON logs | Log gateway: route, security, rate limit và lỗi forwarding |
+| Modular app structured logs | Log nghiệp vụ và exception trong app; nhiều replica cùng `service_name` |
+| Eureka structured JSON logs | Đăng ký/discovery và trạng thái registry |
+| Common Java logs | Gộp gateway, app và Eureka; không thu log Redis/PostgreSQL/hạ tầng vào Loki |
+| HTTP audit — business requests | Method, path, query đã sanitize, status, duration, trace ID và body preview cho route được cho phép |
+
+**HTTP audit không phải log heartbeat.** Không có request phù hợp thì panel có thể
+No data dù app healthy. `/actuator/**`, `/error`, login/logout/auth được loại khỏi
+HTTP audit. Body preview chỉ bật cho Catalog, tối đa theo `HTTP_AUDIT_MAX_BODY_BYTES`
+(mặc định 8192 byte), không phải toàn bộ payload. Token/password không được ghi nguyên văn.
+
+Để kiểm tra audit, đăng nhập bằng client rồi gọi `GET /api/private/catalog` với
+Bearer access token. Kiểm tra response, sau đó tìm trong Loki:
+
+```logql
+{service_name="modular-app"} | json | event="http.audit"
+```
+
+Nếu panel trống: tăng time range, kiểm tra đúng `service_name`, tìm chuỗi
+`http.audit` trong log Docker, rồi kiểm tra Alloy/Loki. Nếu Docker có audit nhưng
+Loki không có thì điều tra pipeline vận chuyển; không thêm traffic giả định kỳ
+chỉ để lấp biểu đồ.
+
+### Runtime: từng biểu đồ
+
+| Biểu đồ | Cách đọc |
+|---|---|
+| JVM heap used | Bộ nhớ heap Java đang dùng theo service/container, MB; khác RAM toàn container |
+| Heap pressure | Heap used/max, %. Cao kéo dài và GC dày có thể thiếu heap; một đỉnh ngắn chưa đủ kết luận |
+| GC pauses / sec | Số lần GC pause/giây trong cửa sổ 5 phút |
+| GC pause time / sec | Tổng thời gian pause/giây; tăng cùng latency thường cần điều tra allocation/heap |
+| Hikari connections — active / idle / max | Ba loại series riêng biệt theo replica/pool, không cộng active với max |
+| Hikari waiting threads | Thread đang chờ connection. Cao kéo dài thường do pool hết, query chậm hoặc giữ transaction lâu |
+| HTTP request rate | Request/giây; giảm về 0 có thể chỉ là không có traffic |
+| HTTP 5xx rate | Lỗi server/giây; đối chiếu audit/exception/trace, không nhầm với lỗi 401/403 |
+| Container CPU | Một core đầy tải = 100%; có thể vượt 100% khi dùng nhiều core |
+| Container memory usage | RAM Docker đo, gồm JVM heap, native, thread stacks và phần bộ nhớ khác; không chỉ heap |
+| JVM scrape — current status per container | Một dòng/container, sample mới nhất giữa các instance ID. OK=đọc được metrics; Lỗi scrape=không đọc được |
+| JVM loaded classes | Số class đang loaded; tăng mãi có thể cần điều tra classloader nhưng startup tăng là bình thường |
+
+Nhiều counter được đổi tên sang hậu tố `_total` khi đi qua bridge OTLP/Prometheus.
+Các biểu đồ `rate(...[5m])` cần đủ sample; app vừa start có thể trống một thời gian.
+
+### Infrastructure: PostgreSQL, Hikari và Redis
+
+Hikari chạy **trong app**, không chạy trong PostgreSQL exporter. Mỗi replica có
+pool riêng. Hiện `HIKARI_MAX_POOL_SIZE=8`, `HIKARI_MIN_IDLE=2`; ba replica tương ứng
+tối đa 24 connection từ các pool app và tối thiểu khoảng 6 khi đã khởi tạo.
+PostgreSQL còn connection từ exporter, backup và client quản trị, nên tổng DB
+connection không nhất thiết bằng tổng active Hikari.
+
+| Panel | Cách đọc / dấu hiệu cần điều tra |
+|---|---|
+| PostgreSQL exporter health | 1: exporter truy cập DB được; không có nghĩa query nghiệp vụ đều nhanh |
+| Redis exporter health | 1: exporter kết nối Redis được |
+| Exporter scrape success | Observer đọc exporter thành công. Exporter scrape OK nhưng `pg_up=0` vẫn có nghĩa DB connection bị lỗi |
+| Hikari active / idle / max | Active: đang được mượn; idle: sẵn để dùng; max: giới hạn cấu hình. Active gần max liên tục cần xem pending/latency |
+| Hikari waiting threads | 0 là không có thread chờ tại lần lấy sample; >0 kéo dài là dấu hiệu pressure |
+| Hikari connection timeouts (5m) | Số timeout tăng trong 5 phút; thường kỳ vọng 0 |
+| Hikari mean acquisition time | Thời gian trung bình lấy connection, không phải thời gian chạy SQL; tăng kèm pending cần điều tra pool/query |
+| PostgreSQL connections | Connection toàn database `modulardb`; đối chiếu `max_connections`, không chỉ pool app |
+| PostgreSQL transactions/sec | Tốc độ commit; monitoring và các client khác cũng có thể tạo transaction |
+| PostgreSQL deadlock increase | Số deadlock tăng trong 10 phút; >0 xem transaction/lock và retry |
+| PostgreSQL buffer hit ratio | Tỷ lệ đọc từ shared buffer. Thấp kéo dài có thể cần xem working set, query và IO; không tự tăng RAM chỉ từ một điểm |
+| Redis memory used MiB | RAM Redis dùng; biểu đồ đã đổi byte sang MiB |
+| Redis memory utilization | Used/maxmemory. Gần 100% cần xử lý sớm; policy hiện tại `noeviction` nên Redis có thể từ chối ghi thay vì evict |
+| Redis clients connected | Số connection client, không phải số user đang đăng nhập |
+| Redis evicted keys/sec | Key bị đẩy ra vì memory policy. Với `noeviction`, 0 không chứng minh Redis vẫn còn chỗ để ghi |
+| Postgres / Redis CPU | CPU container. Kết hợp latency/traffic/RAM trước khi kết luận cần scale |
+
+Không có một ngưỡng heap/latency/pool đúng cho mọi workload. Dùng baseline khi
+bình thường, so sánh thay đổi và các chỉ số liên quan; ngưỡng alert nằm trong
+`infra/lgtm/provisioning/alerting/rules.yaml`.
+
+### JVM Overview và RED mặc định LGTM
+
+| Biểu đồ | Cách đọc |
+|---|---|
+| JVM Rate | Lưu lượng HTTP server, request/giây theo instance |
+| JVM Error % | Tỷ lệ lỗi HTTP server; phải xem unit và query để phân biệt giá trị 0–1 với 0–100 |
+| JVM Duration (95%) | p95: khoảng 95% request nằm dưới độ trễ đó; không phải trung bình |
+| JVM CPU utilization | CPU process JVM theo metric của agent; không mặc định cùng đơn vị/scope với Docker CPU |
+| JVM Heap Memory utilization | Mức dùng heap; so sánh với GC và response latency |
+| JVM Garbage Collection | Tỷ lệ/thời gian GC theo query agent, xem description và đơn vị panel |
+| JVM Classes / Threads | Class loaded và số thread sống theo instance |
+| JVM Common Java logs | Gộp ba Java service/mọi replica. Job/Instance selector của metrics không lọc log chung |
+| RED Request Rate | Lưu lượng request theo service/instance |
+| RED Error Rate | Tốc độ/tỷ lệ lỗi theo query của panel; xem đơn vị trước khi đọc như phần trăm |
+| RED Duration histogram / heatmap | Phân bố latency theo thời gian; màu đậm hơn là nhiều request ở bucket đó |
+| RED Duration percentiles | p50/p95/p99. p99 cao hơn nhiều p50 cho thấy có nhóm request chậm |
+
+Classic và native histogram là hai kiểu dữ liệu khác nhau. Native dashboard có
+thể No data khi exporter/agent chỉ gửi classic; không có nghĩa mọi service chết.
+Nếu biểu đồ phần trăm vượt mức vô lý, kiểm tra unit/scale và mẫu số của query;
+không xem đó là tỷ lệ lỗi nghiệp vụ chính xác khi chưa đối chiếu request.
+
+## 3. Container có tự restart không?
+
+Compose hiện dùng `restart: unless-stopped`: Docker có thể khởi động lại process
+đã thoát; container bị stop chủ động sẽ giữ trạng thái dừng. Policy không tạo lại
+container đã bị `compose down` xóa. Xem [Docker restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/).
+
+Healthcheck đánh dấu readiness; **`unhealthy` không tự restart process còn sống**.
+`depends_on: service_healthy` điều phối startup, không tự chữa lỗi DB xảy ra sau đó.
+Xem [Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/).
+
+| Tình huống | Hành vi trong project |
+|---|---|
+| Java process tự crash | Docker restart policy xử lý; kiểm tra RestartCount, logs, exit/OOM |
+| API treo nhưng process còn sống | Có thể unhealthy; Compose mặc định không restart chỉ vì health |
+| `docker compose restart` | Restart thủ công cùng container, thời điểm StartedAt đổi; Auto restarts có thể vẫn 0 |
+| Rebuild/recreate | Container ID mới, counter mới; không cộng lịch sử của container đã xóa |
+| `docker compose stop` / down | Dừng chủ động; cần start/up khi muốn chạy lại |
+| Watchdog tùy chọn restart | Script dùng Docker restart chủ động, không được hiểu như counter auto restart |
+
+**Watchdog không được Compose bật mặc định.** `scripts/health-watchdog.py` là tool
+host-side riêng: poll mặc định 10 giây, unhealthy liên tục 30 giây mới restart,
+cooldown 90 giây; chỉ can thiệp `modular-app`, `gateway`, `eureka`, không restart DB.
+Trên Linux/VPS, khi chủ động muốn bật, xem `scripts/install-watchdog.sh` và
+`infra/systemd/ddd-watchdog.service.example`; installer tạo bản root-owned riêng
+rồi bật systemd service. Không chạy installer Linux trên macOS.
+Sau khi bật, kiểm tra `systemctl status ddd-watchdog` và `journalctl -u ddd-watchdog`.
+Không chạy watchdog trực tiếp từ checkout mà CI/user khác có thể sửa với quyền root.
+
+Compose không phải Kubernetes controller: không tự tạo replica thay thế đã bị xóa,
+không tự autoscale và không đưa service sang host khác. `Auto restarts=0` cũng không
+chứng minh chưa từng có thao tác restart/redeploy. Hiện không có bộ đếm lịch sử
+restart thủ công vĩnh viễn; thời điểm start và container ID là dữ liệu để đối chiếu.
+
+## 4. Lệnh kiểm tra thực tế
+
+Chạy trong thư mục project. Các lệnh inspect dưới đây chỉ xuất trạng thái cần thiết,
+không dump toàn bộ environment/secret.
+
+```bash
+# Bao gồm container đang dừng; kiểm tra đủ 3 app.
+docker compose ps -a
+
+# Kiểm tra từng replica (thay NAME bằng tên lấy từ compose ps).
+docker inspect NAME --format 'status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} autoRestarts={{.RestartCount}} started={{.State.StartedAt}}'
+docker inspect NAME --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}'
+docker inspect NAME --format '{{if .State.Health}}{{range .State.Health.Log}}{{.End}} exit={{.ExitCode}} {{.Output}}{{end}}{{end}}'
+
+# Log lỗi mới nhất và kiểm tra Actuator một replica.
+docker compose logs --since 10m --tail 100 modular-app
+docker exec NAME curl -fsS http://127.0.0.1:8080/actuator/health
+
+# Khi muốn chạy lại service đã stop.
+docker compose up -d --no-build --scale modular-app=3 --wait --wait-timeout 120
+
+# Restart chủ động; không thay thế deploy code mới.
+./scripts/deploy.sh restart app
+
+# Deploy source mới, giữ 3 replica.
+./scripts/deploy.sh up 3
+```
+
+Nếu host yếu: `docker stats --no-stream`, kiểm tra OOM và RAM host trước khi tăng
+pool/thread/replica. Hikari max 8 * 3 replica chưa tính các DB connection ngoài app.
+Nếu vừa sửa `.env`, restart đơn thuần không áp dụng environment mới; cần recreate
+bằng `compose up` hoặc deployment phù hợp.
+
+## 5. Quy trình xử lý các lỗi thường gặp
+
+### Service không start hoặc cứ chết
+
+1. `compose ps -a`: pending/starting/exited/restarting?
+2. Inspect ExitCode/OOMKilled và StartedAt; đọc log startup đúng container.
+3. Xác nhận DB/Redis healthy, cấu hình/key đọc được, migration đã chạy.
+4. Với fresh DB: tạo user/quyền bằng SQL riêng `.local/db-users.sql` trước app;
+   deploy không còn tự grant. App/Liquibase dùng `run`, backup dùng tài khoản đọc.
+5. Restart chỉ sau khi hiểu nguyên nhân; không lặp restart để che lỗi migration/config.
+
+### App healthy nhưng request thất bại
+
+Kiểm tra HTTP status: 401/403 liên quan token/quyền/origin; 429 liên quan rate limit;
+502/503 có thể gateway/discovery/backend chưa sẵn sàng; 500 cần exception và trace.
+Kiểm tra Eureka đã thấy cả ba replica và gateway có route đến app.
+Đối chiếu pending Hikari, DB connection, HTTP 5xx và duration, không chỉ nhìn CPU.
+
+### Scrape lỗi hoặc nhiều panel No data
+
+Kiểm tra LGTM, observer, Docker socket proxy rồi Actuator/exporters. Phân biệt
+`ddd_observer_scrape_success` (đọc Docker) với `ddd_metrics_scrape_success` (đọc
+endpoint metrics). App có thể hoạt động trong khi monitoring bị lỗi và ngược lại.
+Mỗi JVM scrape row là sample mới nhất theo container; No data khác 0.
+
+### Không thấy logs/traces
+
+Alloy chỉ đọc log stdout/stderr ba Java service và index `service_name`. OTel bật
+chưa đủ để có log nếu Logback đang chỉ ghi file. `file-logs` là fallback tùy chọn.
+So sánh log Docker với Loki. Trace cần request được instrument/sample; dùng time
+range tương ứng và trace ID trong log. Không suy luận trace No data = DB chết.
+
+## 6. Backup và cảnh báo
+
+Backup PostgreSQL chạy ngay khi container start rồi vào đầu mỗi giờ. Giữ 7 ngày;
+chỉ prune bản quá hạn sau dump mới được kiểm tra và xuất bản thành công. Lỗi dump
+không xóa backup hợp lệ trước đó. Health backup kiểm tra tuổi marker và checksum;
+trạng thái healthy không có nghĩa đã kiểm chứng mọi restore nghiệp vụ.
+
+Telegram backup độc lập Grafana, có retry/outbox và template tiếng Việt ở
+`infra/lgtm/resources/backup-notification-template.json`. Grafana alert dùng rules
+và notification resources riêng. RestartCount=0 không phải bằng chứng đã nhận
+Telegram; phải đối chiếu tin nhắn và trạng thái backup.
+
+Không xóa `.last-success`, lock/outbox/cursor của backup hoặc `.deploy/state.env`
+chỉ để dọn thư mục. Xóa state replica có thể khiến observer hiểu sai desired.
+Bản dump cùng host không bảo vệ khỏi mất cả ổ đĩa; khi lên VPS cần chính sách
+sao lưu ngoài host và kiểm tra restore riêng.
+
+## 7. Các phép kiểm tra đã thực hiện ở local
+
+- Gọi GET Catalog với tài khoản test: HTTP 200; audit xuất hiện trong Docker và
+  truy vấn Loki. Session test được logout sau kiểm tra, không ghi token vào tài liệu.
+- Bảng scrape trả đúng 5 container Java (3 app, gateway, Eureka), mỗi container một dòng.
+- Cho process Redis exporter thoát bằng SIGTERM bên trong container: Docker tự
+  khởi động lại cùng container, RestartCount tăng 0 → 1 và health trở lại healthy.
+  Không dùng `compose restart` hoặc `compose up` để kích hoạt lần phục hồi này;
+  Redis và các app tiếp tục chạy. Đây là bằng chứng cho restart policy khi process
+  thoát, không phải bằng chứng tự restart một process còn sống nhưng unhealthy.
+- Đây là snapshot kiểm tra; counter có thể reset khi recreate container.

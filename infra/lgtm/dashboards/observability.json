@@ -226,8 +226,8 @@
     },
     {
       "id": 7,
-      "title": "HTTP API audit: method / URL / parameters / JSON bodies / status / duration",
-      "description": "Backend servlet audit: JSON fields visible in log line details. Bodies logged for Catalog routes only; credentials are redacted; login/logout are excluded.",
+      "title": "HTTP audit — business requests",
+      "description": "Logs appear only after business API requests reach the backend. Actuator and auth/login/logout are excluded. Catalog bodies are sanitized and limited to 8 KB; choose a wider time range to find older requests. No data means no matching audit events in the selected interval, not necessarily a service failure.",
       "type": "logs",
       "datasource": {
         "type": "loki",
@@ -237,7 +237,7 @@
         "x": 0,
         "y": 31,
         "w": 24,
-        "h": 12
+        "h": 9
       },
       "targets": [
         {
@@ -577,7 +577,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 40,
         "w": 24,
         "h": 10
       },
@@ -611,7 +611,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 50,
         "w": 24,
         "h": 12
       },
